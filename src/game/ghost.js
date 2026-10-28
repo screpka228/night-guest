@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { isBlocked } from '../three/collision.js';
 
-// Сетка поиска пути: центры клеток лежат на ±0.1 от осей дверей, проём шириной 1.0 даёт 2 свободные клетки
+// Сетка поиска пути: центры клеток кратны 0.2 м, поэтому лежат ровно на линиях дверей (x = ±3, z = ±1 и т.д.)
 const CELL = 0.2;
 const X0 = -7.5;
 const Z0 = -3.5;
@@ -62,7 +62,8 @@ export function createGhost({ scene, colliders, rooms, difficulty }) {
     for (let i = 0; i < NX; i++) {
       const x = cellX(i);
       const z = cellZ(j);
-      const inRoom = rooms.some((r) => x > r.x1 && x < r.x2 && z > r.z1 && z < r.z2);
+      // границы включительно: клетки проёмов лежат на общей границе комнат
+      const inRoom = rooms.some((r) => x >= r.x1 && x <= r.x2 && z >= r.z1 && z <= r.z2);
       free[j * NX + i] = inRoom && !isBlocked(colliders, x, z, GHOST_R) ? 1 : 0;
     }
   }
@@ -177,12 +178,20 @@ export function createGhost({ scene, colliders, rooms, difficulty }) {
   let searchTimer = 0;
   let searchCenter = null;
   let lastHeard = null;
+  let goal = null;
+  let goalTimer = 0;
+  let searchRoom = null;
 
   function goTo(x, z) {
+    goal = { x, z };
+    goalTimer = 0;
     path = findPath(pos.x, pos.z, x, z);
     idx = 0;
     stuck = 0;
   }
+
+  const roomAt = (p) =>
+    rooms.find((r) => p.x >= r.x1 && p.x <= r.x2 && p.z >= r.z1 && p.z <= r.z2) || null;
   function setState(next, target) {
     state = next;
     if (target) goTo(target.x, target.z);
@@ -203,6 +212,7 @@ export function createGhost({ scene, colliders, rooms, difficulty }) {
     if (!best || best === lastHeard) return;
     lastHeard = best;
     searchCenter = { x: best.x, z: best.z };
+    searchRoom = roomAt(searchCenter);
     setState(bestDist <= difficulty.hearingRadius / 2 ? 'chase' : 'investigate', best);
   }
 
@@ -216,6 +226,8 @@ export function createGhost({ scene, colliders, rooms, difficulty }) {
       return;
     }
     const step = Math.min(speed * dt, dist);
+    const bx = pos.x;
+    const bz = pos.z;
     const nx = pos.x + (dx / dist) * step;
     const nz = pos.z + (dz / dist) * step;
     let moved = false;
@@ -227,13 +239,39 @@ export function createGhost({ scene, colliders, rooms, difficulty }) {
       pos.z = nz;
       moved = true;
     }
-    stuck = moved ? 0 : stuck + dt;
+    const progress = Math.hypot(pos.x - bx, pos.z - bz);
+    stuck = moved && progress >= step * 0.3 ? 0 : stuck + dt;
   }
 
+  // Обход комнаты, где была метка: случайные точки по всей комнате
   function wander() {
-    const a = Math.random() * Math.PI * 2;
-    const r = 0.5 + Math.random() * 2;
-    goTo(searchCenter.x + Math.cos(a) * r, searchCenter.z + Math.sin(a) * r);
+    if (searchRoom) {
+      const m = 0.5;
+      goTo(
+        searchRoom.x1 + m + Math.random() * (searchRoom.x2 - searchRoom.x1 - 2 * m),
+        searchRoom.z1 + m + Math.random() * (searchRoom.z2 - searchRoom.z1 - 2 * m)
+      );
+    } else {
+      const a = Math.random() * Math.PI * 2;
+      const r = 0.5 + Math.random() * 2;
+      goTo(searchCenter.x + Math.cos(a) * r, searchCenter.z + Math.sin(a) * r);
+    }
+  }
+
+  function newPatrolPoint() {
+    const p = randomFreePoint();
+    goTo(p.x, p.z);
+  }
+
+  // Выталкивание: встали на месте — привязываемся к ближайшей свободной клетке и перестраиваем путь
+  function unstick() {
+    const c = nearestFree(...toCell(pos.x, pos.z));
+    if (c) {
+      pos.x = cellX(c[0]);
+      pos.z = cellZ(c[1]);
+    }
+    if (state === 'patrol' || !goal) newPatrolPoint();
+    else goTo(goal.x, goal.z);
   }
 
   function update(dt, events) {
@@ -249,33 +287,30 @@ export function createGhost({ scene, colliders, rooms, difficulty }) {
 
     if (idx < path.length) {
       move(dt, SPEED[state] * difficulty.ghostSpeed);
-      if (stuck > 1) {
-        // упёрлись: новая точка или новый путь
-        if (state === 'patrol') {
-          const p = randomFreePoint();
-          goTo(p.x, p.z);
-        } else if (searchCenter) {
-          wander();
-        }
+      goalTimer += dt;
+      if (stuck > 0.5) {
+        unstick();
+      } else if (state === 'patrol' && goalTimer > 5) {
+        newPatrolPoint(); // не дошёл за 5 секунд — другая точка
       }
     } else {
       // дошли до цели
       if (state === 'investigate' || state === 'chase') {
         state = 'search';
         searchTimer = SEARCH_TIME;
+        wait = 0;
         wander();
       } else if (state === 'search') {
         wait -= dt;
         if (wait <= 0) {
-          wait = 0.5 + Math.random();
+          wait = 0.3 + Math.random() * 0.5;
           wander();
         }
       } else {
         wait -= dt;
         if (wait <= 0) {
           wait = 0.5 + Math.random();
-          const p = randomFreePoint();
-          goTo(p.x, p.z);
+          newPatrolPoint();
         }
       }
     }

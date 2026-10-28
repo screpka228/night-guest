@@ -259,3 +259,16 @@ input[type='range']::-moz-range-thumb {
   pointer-events: none;
   white-space: pre;
 }
+
+.overlay-dead {
+  z-index: 40;
+  background: #000;
+  animation: deathflash 1.2s ease-out;
+}
+.dead-box { margin: auto; text-align: center; color: #c33; display: flex; flex-direction: column; gap: 16px; align-items: center; }
+.dead-box h2 { margin: 0; font-size: 32px; }
+.dead-box p { margin: 0; color: #d0d0d0; }
+@keyframes deathflash {
+  0% { background: #d00000; }
+  100% { background: #000; }
+}

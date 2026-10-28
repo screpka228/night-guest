@@ -31,6 +31,7 @@ export function mountPause(parent, { onResume, onExit }) {
   el.querySelector('[data-settings]').addEventListener('click', () => {
     if (settings) return;
     settings = mountSettingsPanel(parent, {
+      showBrightness: true,
       onBack: () => {
         settings.destroy();
         settings = null;

@@ -1,13 +1,15 @@
 import { navigate } from '../router.js';
 import { applySettingsVars, applyBrightness } from '../data/settings.js';
-import { getDifficulty, getAttemptsLeft } from '../data/difficulty.js';
+import { getDifficulty, getAttemptsLeft, spendAttempt } from '../data/difficulty.js';
 import { createGameState, resetGameState, pauseGame, resumeGame } from '../data/game-state.js';
 import { initScene, resizeScene, disposeScene } from '../three/scene.js';
 import { initControls } from '../three/controls.js';
 import { createLoop } from '../three/render.js';
 import { updateNoise, clearNoise, noiseEvents, noiseLevel } from '../game/noise.js';
 import { createGhost } from '../game/ghost.js';
+import { playScream } from '../game/sfx.js';
 import { mountPause } from './pause.js';
+import { mountGameOver } from './gameover.js';
 
 const cap = (s) => s[0].toUpperCase() + s.slice(1);
 
@@ -36,6 +38,17 @@ export function mountGame(root) {
     screen.appendChild(devInfo);
   }
   let logAcc = 0;
+  let dead = false;
+  let gameOver = null;
+
+  const caught = () => {
+    dead = true;
+    loop?.stop();
+    controls?.reset();
+    playScream();
+    navigator.vibrate?.([200, 100, 200]);
+    gameOver = mountGameOver(screen, { attemptsLeft: spendAttempt() });
+  };
 
   let three = null;
   let controls = null;
@@ -63,6 +76,10 @@ export function mountGame(root) {
         const p = three.camera.position;
         updateNoise(dt, { x: p.x, z: p.z, moving: s.moving, noise: s.noise });
         ghost.update(dt, noiseEvents);
+        if (!dead && ghost.getState() === 'chase' && Math.hypot(ghost.pos.x - p.x, ghost.pos.z - p.z) < 1.0) {
+          caught();
+          return;
+        }
         meter.dataset.level = noiseLevel(s.noise);
         if (devInfo) {
           const dist = Math.hypot(ghost.pos.x - p.x, ghost.pos.z - p.z);
@@ -95,7 +112,7 @@ export function mountGame(root) {
     loop?.start();
   };
   const openPause = () => {
-    if (pause) return;
+    if (pause || dead) return;
     pauseGame();
     loop?.stop();
     controls?.reset();
@@ -112,6 +129,7 @@ export function mountGame(root) {
   return () => {
     window.removeEventListener('resize', onResize);
     pause?.destroy();
+    gameOver?.destroy();
     loop?.dispose();
     controls?.dispose();
     if (three) disposeScene(three);

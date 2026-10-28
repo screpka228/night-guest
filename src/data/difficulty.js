@@ -32,3 +32,14 @@ export function getAttemptsLeft() {
   const v = Number(read('ng_attempts_left'));
   return read('ng_attempts_left') !== null && !Number.isNaN(v) ? v : getDifficulty().attempts;
 }
+
+// Списывает одну попытку (в практике они бесконечны); возвращает остаток
+export function spendAttempt() {
+  const left = getAttemptsLeft();
+  if (left === Infinity) return Infinity;
+  const next = Math.max(0, left - 1);
+  try {
+    localStorage.setItem('ng_attempts_left', String(next));
+  } catch {}
+  return next;
+}
