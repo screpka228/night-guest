@@ -17,6 +17,7 @@ const SCREENS = {
 let cleanup = null;
 
 export function navigate(screen) {
+  screen = screen.replace(/^#/, '');
   if (location.hash !== '#' + screen) {
     location.hash = screen;
     return;

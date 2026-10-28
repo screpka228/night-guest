@@ -6,3 +6,11 @@ export const DIFFICULTIES = {
   extreme:   { name: 'Экстрим',   attempts: 1,        desc: 'Ложный гость преследует' },
   challenge: { name: 'Челлендж',  attempts: 1,        desc: 'Реальность почти неотличима' }
 };
+
+export function getDifficulty() {
+  let key = null;
+  try {
+    key = localStorage.getItem('ng_difficulty');
+  } catch {}
+  return DIFFICULTIES[key] ? key : 'normal';
+}
