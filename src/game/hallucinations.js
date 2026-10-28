@@ -106,7 +106,7 @@ export function createHallucinations({ scene, camera, colliders, rooms, containe
 
   function setFilter(on) {
     const base = 'brightness(' + getBrightness() + ')';
-    canvas.style.filter = on ? base + ' hue-rotate(90deg) contrast(1.5)' : base;
+    canvas.style.filter = on ? base + ' hue-rotate(90deg) contrast(1.2)' : base;
   }
 
   function screamer() {
@@ -216,6 +216,12 @@ export function createHallucinations({ scene, camera, colliders, rooms, containe
     },
     setStress: (v) => {
       stress = v;
+    },
+    // искажение реальности по запросу (например, если долго смотреть на гостя)
+    triggerDistort() {
+      if (distortLeft > 0) return;
+      distortLeft = 1;
+      setFilter(true);
     },
     debugSpawnFake: () => spawnFake(lastPlayer),
     // для отладки: сейчас работают ли галлюцинации

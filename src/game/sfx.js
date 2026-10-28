@@ -1,9 +1,10 @@
+import { getAudioContext } from './audio.js';
 let ctx = null;
 
 // Скример: короткий громкий шум + падающий тон
 export function playScream() {
   try {
-    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+    ctx = ctx || getAudioContext();
     if (ctx.state === 'suspended') ctx.resume();
     const dur = 1.2;
     const now = ctx.currentTime;
@@ -35,7 +36,7 @@ export function playScream() {
 // Затаённое дыхание: тихий фильтрованный шум с медленной пульсацией; возвращает функцию остановки
 export function startBreathSound() {
   try {
-    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+    ctx = ctx || getAudioContext();
     if (ctx.state === 'suspended') ctx.resume();
     const buf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
     const data = buf.getChannelData(0);
@@ -74,7 +75,7 @@ export function startBreathSound() {
 // Скрип двери: низкий пилообразный тон с дрожанием
 export function playCreak() {
   try {
-    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+    ctx = ctx || getAudioContext();
     if (ctx.state === 'suspended') ctx.resume();
     const now = ctx.currentTime;
     const osc = ctx.createOscillator();
@@ -100,7 +101,7 @@ export function playCreak() {
 // Рингтон телефона: двойной писк, пока не остановят
 export function startRingtone() {
   try {
-    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+    ctx = ctx || getAudioContext();
     if (ctx.state === 'suspended') ctx.resume();
     const osc = ctx.createOscillator();
     osc.type = 'square';
@@ -135,7 +136,7 @@ export function startRingtone() {
 // Удар брошенного предмета: короткий шум и низкий тон
 export function playImpact() {
   try {
-    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+    ctx = ctx || getAudioContext();
     if (ctx.state === 'suspended') ctx.resume();
     const now = ctx.currentTime;
     const dur = 0.25;
@@ -166,7 +167,7 @@ export function playImpact() {
 // Тихий стук/скрип открываемого ящика
 export function playKnock() {
   try {
-    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+    ctx = ctx || getAudioContext();
     if (ctx.state === 'suspended') ctx.resume();
     const now = ctx.currentTime;
     const osc = ctx.createOscillator();
@@ -193,7 +194,7 @@ export function playTrap() {
 // Ложные шаги за спиной (только звук, без меток шума)
 export function playFootsteps() {
   try {
-    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+    ctx = ctx || getAudioContext();
     if (ctx.state === 'suspended') ctx.resume();
     const t0 = ctx.currentTime + 0.05;
     const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
@@ -226,7 +227,7 @@ export function playFootsteps() {
 // Скрежет ложного скримера
 export function playScreech() {
   try {
-    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+    ctx = ctx || getAudioContext();
     if (ctx.state === 'suspended') ctx.resume();
     const now = ctx.currentTime;
     const osc = ctx.createOscillator();
@@ -246,7 +247,7 @@ export function playScreech() {
 // Дыхание под стрессом: setLevel(0..1) делает его громче и чаще
 export function startStressBreath() {
   try {
-    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+    ctx = ctx || getAudioContext();
     if (ctx.state === 'suspended') ctx.resume();
     const buf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
     const data = buf.getChannelData(0);
@@ -292,7 +293,7 @@ export function startStressBreath() {
 // Глухой удар сердца: три «тум-тум»
 export function playHeartbeat() {
   try {
-    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+    ctx = ctx || getAudioContext();
     if (ctx.state === 'suspended') ctx.resume();
     const t0 = ctx.currentTime + 0.05;
     for (let i = 0; i < 3; i++) {
@@ -316,7 +317,7 @@ export function playHeartbeat() {
 // Замок входной двери: два щелчка
 export function playLock() {
   try {
-    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+    ctx = ctx || getAudioContext();
     if (ctx.state === 'suspended') ctx.resume();
     const t0 = ctx.currentTime;
     for (const off of [0, 0.22]) {

@@ -13,7 +13,9 @@ import { createPhone } from '../game/phone.js';
 import { createVents } from '../game/vents.js';
 import { updateNoise, clearNoise, noiseEvents, noiseLevel, quietLeft } from '../game/noise.js';
 import { createGhost } from '../game/ghost.js';
-import { playScream, playHeartbeat, playLock } from '../game/sfx.js';
+import { playHeartbeat, playLock } from '../game/sfx.js';
+import { startDrone, stopAmbient, updateAudio, scream, whisper, suspendAudio, resumeAudio } from '../game/audio.js';
+import { isBlocked } from '../three/collision.js';
 import { mountPause } from './pause.js';
 import { mountEndingD, mountEndingA, mountEndingC, mountCredits } from './gameover.js';
 import { spawnContents } from '../game/spawn.js';
@@ -34,6 +36,9 @@ export function mountGame(root) {
     <div class="screen game">
       <canvas id="game-canvas"></canvas>
       <div class="hud">${getDifficulty().name} · Попытки: ${attempts === Infinity ? '∞' : attempts} · Ночь ${night}</div>
+      <div class="fx-vignette"></div>
+      <div class="fx-grain"></div>
+      <div class="fx-stress"></div>
       <div class="goal-hud">Обыщи квартиру</div>
       <div class="noise-meter" data-level="0"><i></i><i></i><i></i></div>
       <div class="quiet-hud" hidden>Тихо...</div>
@@ -53,6 +58,11 @@ export function mountGame(root) {
     screen.appendChild(devInfo);
   }
   let logAcc = 0;
+  let lastGhost = { x: 0, z: 0 };
+  let lookT = 0;
+  let whisperT = 0;
+  let rippleT = 0;
+  const fxStress = root.querySelector('.fx-stress');
   let dead = false;
   let gameOver = null;
   let hiding = null;
@@ -74,6 +84,7 @@ export function mountGame(root) {
 
   // общая остановка игры перед экраном концовки
   const stopAll = () => {
+    stopAmbient();
     dead = true; // пауза, поимка и таймеры отключены
     endCard();
     loop?.stop();
@@ -100,7 +111,7 @@ export function mountGame(root) {
 
   const caught = () => {
     stopAll();
-    playScream();
+    scream();
     navigator.vibrate?.([200, 100, 200]);
     gameOver = mountEndingD(screen, { attemptsLeft: spendAttempt() });
   };
@@ -264,6 +275,47 @@ export function mountGame(root) {
         if (nearCloset) hideBtn.textContent = nearCloset.type === 'bed' ? 'Под кровать' : 'Спрятаться';
         quietHud.hidden = quietLeft() <= 0;
         meter.dataset.level = noiseLevel(s.noise);
+
+        // --- звук и пост-эффекты ---
+        const gdx = ghost.pos.x - p.x;
+        const gdz = ghost.pos.z - p.z;
+        const gdist = Math.hypot(gdx, gdz);
+        const ghostSpeed = Math.hypot(ghost.pos.x - lastGhost.x, ghost.pos.z - lastGhost.z) / Math.max(dt, 0.001);
+        lastGhost = { x: ghost.pos.x, z: ghost.pos.z };
+        const yaw = three.camera.rotation.y;
+        const heartK = Math.max(halluc.stress / 100, ghost.disabled ? 0 : Math.max(0, 1 - gdist / 8));
+        updateAudio(dt, {
+          heartK,
+          moving: s.moving && !hiding.active,
+          mode: s.mode,
+          ghostMoving: !ghost.disabled && ghostSpeed > 0.2,
+          ghostSpeed,
+          ghostDist: gdist,
+          ghostPan: gdist > 0.01 ? Math.max(-1, Math.min(1, (gdx * Math.cos(yaw) - gdz * Math.sin(yaw)) / gdist)) : 0
+        });
+        fxStress.classList.toggle('on', halluc.stress > 60);
+
+        // долго смотришь на гостя — шёпот и рябь
+        let seen = false;
+        if (!ghost.disabled && gdist < 12 && gdist > 0.01) {
+          const fx = -Math.sin(yaw);
+          const fz = -Math.cos(yaw);
+          const dot = (fx * gdx + fz * gdz) / gdist;
+          seen = dot > 0.9 && !isBlocked(three.colliders, (p.x + ghost.pos.x) / 2, (p.z + ghost.pos.z) / 2, 0.05);
+        }
+        lookT = seen ? lookT + dt : Math.max(0, lookT - dt * 2);
+        if (lookT > 3) {
+          whisperT -= dt;
+          if (whisperT <= 0) {
+            whisperT = 2.5;
+            whisper();
+          }
+          rippleT -= dt;
+          if (rippleT <= 0) {
+            rippleT = 6;
+            halluc.triggerDistort();
+          }
+        }
         if (devInfo) {
           const dist = Math.hypot(ghost.pos.x - p.x, ghost.pos.z - p.z);
           const last = noiseEvents[noiseEvents.length - 1];
@@ -285,6 +337,7 @@ export function mountGame(root) {
       debugText: () => `noise=${noiseEvents.length}`
     });
     loop.start();
+    startDrone();
     if (night > 1) {
       showCard(`Ночь ${night}. Ты снова здесь. Ты не помнишь, как уснул.`, 3, false);
       ghost.freeze(3, 1);
@@ -303,12 +356,14 @@ export function mountGame(root) {
     pause.destroy();
     pause = null;
     resumeGame();
+    resumeAudio();
     controls?.applyLayout(); // настройки из паузы применяются сразу
     loop?.start();
   };
   const openPause = () => {
     if (pause || dead) return;
     pauseGame();
+    suspendAudio();
     loop?.stop();
     controls?.reset();
     pause = mountPause(screen, {
@@ -324,6 +379,8 @@ export function mountGame(root) {
   return () => {
     window.removeEventListener('resize', onResize);
     pause?.destroy();
+    stopAmbient();
+    resumeAudio();
     gameOver?.destroy();
     timeouts.forEach(clearTimeout);
     card?.el.remove();

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { woodFloor, concreteWall, wallpaper } from './textures.js';
 
 const WALL_T = 0.15;
 const WALL_H = 2.7;
@@ -39,7 +40,9 @@ export function initScene(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.setSize(window.innerWidth, window.innerHeight, false);
-  renderer.shadowMap.enabled = false;
+  // тени только от фонарика (shadow.mapSize = 512 для экономии)
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.setClearColor(0x000000);
 
   const scene = new THREE.Scene();
@@ -60,35 +63,44 @@ export function initScene(canvas) {
   // --- освещение ---
   const ambient = new THREE.AmbientLight(0x222233, 0.6);
   scene.add(ambient);
-  const moon = new THREE.DirectionalLight(0x334466, 0.4);
+  const moon = new THREE.DirectionalLight(0x2f4f99, 0.4); // холодный синий лунный свет
   moon.position.set(-10, 8, -10); // из окна спальни, с северо-запада
   scene.add(moon);
 
   const flashlight = new THREE.SpotLight(0xffffff, 2.5, 10, Math.PI / 4, 0.3, 1);
   flashlight.position.set(0, 0, 0);
+  flashlight.castShadow = true;
+  flashlight.shadow.mapSize.set(512, 512);
+  flashlight.shadow.camera.near = 0.2;
+  flashlight.shadow.camera.far = 10;
+  flashlight.shadow.bias = -0.0008;
   flashlight.target.position.set(0, 0, -1);
   camera.add(flashlight);
   camera.add(flashlight.target);
 
-  // --- полы и потолки ---
+  // --- полы и потолки (процедурные текстуры) ---
+  const floorTex = woodFloor();
+  const wallTex = concreteWall();
+  const ceilMat = new THREE.MeshLambertMaterial({ map: wallpaper(), color: 0x444444 });
   const rooms = ROOM_DEFS.map((r) => ({ ...r }));
   for (const r of rooms) {
     const w = r.x2 - r.x1;
     const d = r.z2 - r.z1;
     const cx = (r.x1 + r.x2) / 2;
     const cz = (r.z1 + r.z2) / 2;
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat(r.floor));
+    // доски на полу, оттенок комнаты — множитель к текстуре
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshLambertMaterial({ map: floorTex, color: new THREE.Color(r.floor).multiplyScalar(2.2) }));
     floor.rotation.x = -Math.PI / 2;
     floor.position.set(cx, 0, cz);
     scene.add(floor);
-    const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat(0x161616));
+    const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(w, d), ceilMat);
     ceiling.rotation.x = Math.PI / 2;
     ceiling.position.set(cx, WALL_H, cz);
     scene.add(ceiling);
   }
 
   // --- стены с проёмами ---
-  const wallMat = mat(0x6b645d);
+  const wallMat = new THREE.MeshLambertMaterial({ map: wallTex, color: 0xb8b0a8 });
   function wallPiece(horizontal, fixed, t1, t2, y1, y2, collide) {
     const len = t2 - t1;
     const c = (t1 + t2) / 2;
@@ -262,6 +274,14 @@ export function initScene(canvas) {
   plane(1.2, 1, -10.91, 1.5, 0.9, Math.PI / 2, windowMat);
   plane(1.2, 1, -0.5, 1.5, 7.16, Math.PI, windowMat);
 
+  // тени: фонарик отбрасывает их от стен и мебели
+  scene.traverse((o) => {
+    if (!o.isMesh) return;
+    const planar = o.geometry.type === 'PlaneGeometry';
+    o.castShadow = !planar && o.material.type === 'MeshLambertMaterial';
+    o.receiveShadow = o.material.type === 'MeshLambertMaterial';
+  });
+
   // Проёмы для дверей
   const doorways = [];
   for (const [horizontal, fixed, , , doors = []] of WALLS) {
@@ -281,7 +301,10 @@ export function disposeScene({ scene, renderer }) {
   scene.traverse((o) => {
     o.geometry?.dispose();
     const m = o.material;
-    if (m) (Array.isArray(m) ? m : [m]).forEach((x) => x.dispose());
+    if (m) (Array.isArray(m) ? m : [m]).forEach((x) => {
+      x.map?.dispose();
+      x.dispose();
+    });
   });
   renderer.dispose();
 }
