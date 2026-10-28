@@ -141,9 +141,9 @@ export function initScene(canvas) {
   // Шкафы (прячемся внутри): rotationY — куда смотрит дверца, наружная нормаль = (sin, cos)
   const closets = [
     { id: 'bedroom', x: -5, z: 1.6, rotationY: Math.PI, w: 2, d: 0.6 },
-    { id: 'corridor', x: -1.8, z: 0.62, rotationY: Math.PI, w: 1, d: 0.6 }
+    { id: 'corridor', x: 1.7, z: 0.62, rotationY: Math.PI, w: 1, d: 0.6 } // у южной стены, не у дверей
   ];
-  furn({ w: 1, h: 2, d: 0.6, x: -1.8, z: 0.62, color: 0x2e2118 });
+  furn({ w: 1, h: 2, d: 0.6, x: 1.7, z: 0.62, color: 0x2e2118 });
   for (const c of closets) {
     const door = new THREE.Mesh(new THREE.PlaneGeometry(c.w - 0.12, 1.9), mat(0x4a3626));
     door.position.set(c.x + Math.sin(c.rotationY) * (c.d / 2 + 0.01), 1.0, c.z + Math.cos(c.rotationY) * (c.d / 2 + 0.01));
@@ -185,7 +185,13 @@ export function initScene(canvas) {
   plane(1.2, 1, -6.91, 1.5, -1, Math.PI / 2, windowMat);
   plane(1.2, 1, 1.2, 1.5, 4.91, Math.PI, windowMat);
 
-  return { scene, camera, renderer, rooms, colliders, closets };
+  // Проёмы для дверей
+  const doorways = [];
+  for (const [horizontal, fixed, , , doors = []] of WALLS) {
+    for (const c of doors) doorways.push(horizontal ? { x: c, z: fixed, horizontal } : { x: fixed, z: c, horizontal });
+  }
+
+  return { scene, camera, renderer, rooms, colliders, closets, doorways };
 }
 
 export function resizeScene({ camera, renderer }) {

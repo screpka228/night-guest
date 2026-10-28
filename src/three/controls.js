@@ -36,13 +36,13 @@ export function initControls(camera, canvas, { colliders, dynamicColliders = [],
 
   function setMode(next) {
     mode = mode === next ? 'walk' : next; // повторное нажатие возвращает шаг
-    buttons.querySelectorAll('.mode-btn').forEach((b) => {
+    buttons.querySelectorAll('[data-mode]').forEach((b) => {
       b.className = 'mode-btn' + (b.dataset.mode === mode ? ' active-' + mode : '');
     });
     onModeChange?.(mode, MODES[mode]);
   }
   // pointerdown надёжнее click при мультитаче (пальцы на джойстике и камере)
-  buttons.querySelectorAll('.mode-btn').forEach((b) =>
+  buttons.querySelectorAll('[data-mode]').forEach((b) =>
     b.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       setMode(b.dataset.mode);
@@ -235,5 +235,5 @@ export function initControls(camera, canvas, { colliders, dynamicColliders = [],
     buttons.remove();
   }
 
-  return { update, reset, applyLayout, getState, look: applyLook, hide, show, isHidden: () => !!hidden, dispose };
+  return { modeButtons: buttons, update, reset, applyLayout, getState, look: applyLook, hide, show, isHidden: () => !!hidden, dispose };
 }
