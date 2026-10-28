@@ -138,6 +138,19 @@ export function initScene(canvas) {
   furn({ w: 0.5, h: 0.5, d: 0.4, x: -4.45, z: -1.7, color: 0x3a2a1c });
   cylinder(0.08, 0.3, -4.45, 0.5, -1.7, basic(0xc9a66b));
 
+  // Шкафы (прячемся внутри): rotationY — куда смотрит дверца, наружная нормаль = (sin, cos)
+  const closets = [
+    { id: 'bedroom', x: -5, z: 1.6, rotationY: Math.PI, w: 2, d: 0.6 },
+    { id: 'corridor', x: -1.8, z: 0.62, rotationY: Math.PI, w: 1, d: 0.6 }
+  ];
+  furn({ w: 1, h: 2, d: 0.6, x: -1.8, z: 0.62, color: 0x2e2118 });
+  for (const c of closets) {
+    const door = new THREE.Mesh(new THREE.PlaneGeometry(c.w - 0.12, 1.9), mat(0x4a3626));
+    door.position.set(c.x + Math.sin(c.rotationY) * (c.d / 2 + 0.01), 1.0, c.z + Math.cos(c.rotationY) * (c.d / 2 + 0.01));
+    door.rotation.y = c.rotationY;
+    scene.add(door);
+  }
+
   // Коридор
   cylinder(0.03, 1.8, 2.5, 0, -0.8, mat(0x222222));
   furn({ w: 0.3, h: 0.04, d: 0.3, x: 2.5, z: -0.8, y: 1.8, color: 0x222222, shadow: false });
@@ -172,7 +185,7 @@ export function initScene(canvas) {
   plane(1.2, 1, -6.91, 1.5, -1, Math.PI / 2, windowMat);
   plane(1.2, 1, 1.2, 1.5, 4.91, Math.PI, windowMat);
 
-  return { scene, camera, renderer, rooms, colliders };
+  return { scene, camera, renderer, rooms, colliders, closets };
 }
 
 export function resizeScene({ camera, renderer }) {

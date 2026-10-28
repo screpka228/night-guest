@@ -21,6 +21,11 @@ export function updateNoise(dt, { x, z, moving, noise }) {
   }
 }
 
+// Разовая метка шума (укрытие в шкафу, вынужденный выход)
+export function emitNoise(x, z, intensity, extra = {}) {
+  noiseEvents.push({ x, z, intensity, ttl: NOISE_TTL, ...extra });
+}
+
 export function clearNoise() {
   noiseEvents.length = 0;
   timer = 0;

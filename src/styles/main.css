@@ -274,3 +274,41 @@ input[type='range']::-moz-range-thumb {
   0% { background: #d00000; }
   100% { background: #000; }
 }
+
+.hide-btn {
+  position: absolute;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 100;
+  pointer-events: auto;
+  touch-action: none;
+}
+.hide-btn[hidden] { display: none; }
+
+.hide-bar { position: absolute; left: 0; right: 0; height: 35%; background: #000; z-index: 90; pointer-events: none; }
+.hide-bar-top { top: 0; }
+.hide-bar-bottom { bottom: 0; }
+.hide-tap { position: absolute; inset: 0; z-index: 95; touch-action: none; }
+.breath {
+  position: absolute;
+  left: 20%;
+  width: 60%;
+  bottom: 37%;
+  height: 20px;
+  border: 1px solid #555;
+  background: #5a1515;
+  z-index: 96;
+  pointer-events: none;
+}
+.breath.red { border-color: #c33; }
+.breath-zone { position: absolute; top: 0; bottom: 0; background: #2f8f3f; }
+.breath-marker { position: absolute; top: -4px; bottom: -4px; width: 4px; margin-left: -2px; background: #fff; }
+.hide-exit {
+  position: absolute;
+  left: 50%;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 100;
+  touch-action: none;
+}

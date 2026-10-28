@@ -5,6 +5,7 @@ import { createGameState, resetGameState, pauseGame, resumeGame } from '../data/
 import { initScene, resizeScene, disposeScene } from '../three/scene.js';
 import { initControls } from '../three/controls.js';
 import { createLoop } from '../three/render.js';
+import { createHiding } from '../game/hiding.js';
 import { updateNoise, clearNoise, noiseEvents, noiseLevel } from '../game/noise.js';
 import { createGhost } from '../game/ghost.js';
 import { playScream } from '../game/sfx.js';
@@ -24,6 +25,7 @@ export function mountGame(root) {
       <canvas id="game-canvas"></canvas>
       <div class="hud">${getDifficulty().name} · Попытки: ${attempts === Infinity ? '∞' : attempts}</div>
       <div class="noise-meter" data-level="0"><i></i><i></i><i></i></div>
+      <button class="hide-btn" data-hide hidden>Спрятаться</button>
       <button class="pause-btn" data-pause aria-label="Пауза">⏸</button>
     </div>`;
   const screen = root.querySelector('.game');
@@ -41,11 +43,20 @@ export function mountGame(root) {
   let logAcc = 0;
   let dead = false;
   let gameOver = null;
+  let hiding = null;
+  let nearCloset = null;
+  const hideBtn = root.querySelector('[data-hide]');
+  hideBtn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    if (nearCloset && !dead) hiding.enter(nearCloset);
+  });
 
   const caught = () => {
     dead = true;
     loop?.stop();
     controls?.reset();
+    hiding?.dispose();
+    hideBtn.hidden = true;
     playScream();
     navigator.vibrate?.([200, 100, 200]);
     gameOver = mountGameOver(screen, { attemptsLeft: spendAttempt() });
@@ -69,7 +80,8 @@ export function mountGame(root) {
       dynamicColliders: [ghost.collider], // сквозь гостя не пройти
       container: screen
     });
-    if (debug) window.__ng = { camera: three.camera, ghost, colliders: three.colliders, noiseEvents };
+    hiding = createHiding({ container: screen, camera: three.camera, controls, onCaught: caught });
+    if (debug) window.__ng = { camera: three.camera, ghost, colliders: three.colliders, noiseEvents, hiding };
     loop = createLoop({
       renderer: three.renderer,
       scene: three.scene,
@@ -81,16 +93,27 @@ export function mountGame(root) {
         const s = controls.getState();
         const p = three.camera.position;
         updateNoise(dt, { x: p.x, z: p.z, moving: s.moving, noise: s.noise });
-        ghost.update(dt, noiseEvents, { x: p.x, z: p.z });
+        hiding.update(dt, ghost);
+        ghost.update(dt, noiseEvents, hiding.active ? null : { x: p.x, z: p.z });
         // поимка не зависит от состояния гостя: подошёл вплотную — поймал
-        if (!dead && Math.hypot(ghost.pos.x - p.x, ghost.pos.z - p.z) < CATCH_DISTANCE) {
+        if (!dead && !hiding.active && Math.hypot(ghost.pos.x - p.x, ghost.pos.z - p.z) < CATCH_DISTANCE) {
           caught();
           return;
         }
+        // подсказка «Спрятаться»: шкаф в радиусе 1.5 м (от ближайшего края)
+        nearCloset = null;
+        if (!hiding.active && !dead) {
+          for (const c of three.closets) {
+            const dx = Math.max(Math.abs(p.x - c.x) - c.w / 2, 0);
+            const dz = Math.max(Math.abs(p.z - c.z) - c.d / 2, 0);
+            if (Math.hypot(dx, dz) <= 1.5) nearCloset = c;
+          }
+        }
+        hideBtn.hidden = !nearCloset;
         meter.dataset.level = noiseLevel(s.noise);
         if (devInfo) {
           const dist = Math.hypot(ghost.pos.x - p.x, ghost.pos.z - p.z);
-          devInfo.textContent = `Игрок: ${cap(s.mode)}\nГость: ${cap(ghost.getState())}${ghost.isListening() ? ' (слушает)' : ''}  dist=${dist.toFixed(1)}`;
+          devInfo.textContent = `Игрок: ${cap(s.mode)}\n${hiding.active ? 'В шкафу, ' : ''}Гость: ${cap(ghost.getState())}${ghost.isListening() ? ' (слушает)' : ''}  dist=${dist.toFixed(1)}`;
           logAcc += dt;
           if (logAcc >= 1) {
             logAcc = 0;
@@ -137,6 +160,7 @@ export function mountGame(root) {
     window.removeEventListener('resize', onResize);
     pause?.destroy();
     gameOver?.destroy();
+    hiding?.dispose();
     loop?.dispose();
     controls?.dispose();
     if (three) disposeScene(three);

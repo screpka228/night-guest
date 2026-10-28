@@ -31,3 +31,42 @@ export function playScream() {
     osc.stop(now + dur);
   } catch {}
 }
+
+// Затаённое дыхание: тихий фильтрованный шум с медленной пульсацией; возвращает функцию остановки
+export function startBreathSound() {
+  try {
+    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state === 'suspended') ctx.resume();
+    const buf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 500;
+    const gain = ctx.createGain();
+    gain.gain.value = 0.08;
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 0.7;
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.value = 0.07;
+    lfo.connect(lfoGain);
+    lfoGain.connect(gain.gain);
+    src.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    src.start();
+    lfo.start();
+    return () => {
+      try {
+        src.stop();
+        lfo.stop();
+        gain.disconnect();
+      } catch {}
+    };
+  } catch {
+    return () => {};
+  }
+}

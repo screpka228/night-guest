@@ -188,6 +188,7 @@ export function createGhost({ scene, colliders, rooms, difficulty, practice = fa
   let lastHeard = null;
   let goal = null;
   let listenTimer = 0;
+  let searchTight = false;
   let pendingTarget = null;
   let goalTimer = 0;
   let searchRoom = null;
@@ -223,6 +224,7 @@ export function createGhost({ scene, colliders, rooms, difficulty, practice = fa
     lastHeard = best;
     searchCenter = { x: best.x, z: best.z };
     searchRoom = roomAt(searchCenter);
+    searchTight = !!best.closet; // шум из шкафа — ищем прямо у него
     const next = best.intensity >= RUN_NOISE ? 'chase' : 'investigate';
     const idle = state === 'patrol' || state === 'search';
     if (!idle && !(state === 'chase' && next === 'investigate')) state = next;
@@ -277,7 +279,11 @@ export function createGhost({ scene, colliders, rooms, difficulty, practice = fa
 
   // Обход комнаты, где была метка: случайные точки по всей комнате
   function wander() {
-    if (searchRoom) {
+    if (searchTight) {
+      const a = Math.random() * Math.PI * 2;
+      const r = 0.3 + Math.random() * 1.2;
+      goTo(searchCenter.x + Math.cos(a) * r, searchCenter.z + Math.sin(a) * r);
+    } else if (searchRoom) {
       const m = 0.5;
       goTo(
         searchRoom.x1 + m + Math.random() * (searchRoom.x2 - searchRoom.x1 - 2 * m),

@@ -11,6 +11,8 @@ const DOUBLE_TAP_MS = 300;
 const PLAYER_RADIUS = 0.3;
 const THUMB_MAX = 40;
 const PITCH_LIMIT = Math.PI / 3;
+const HIDE_YAW = Math.PI / 6; // ±30° из шкафа
+const HIDE_EYE = 1.5;
 
 export function initControls(camera, canvas, { colliders, dynamicColliders = [], container, onModeChange }) {
   let sensitivity = getSensitivity();
@@ -114,6 +116,19 @@ export function initControls(camera, canvas, { colliders, dynamicColliders = [],
   // --- поворот камеры ---
   let lookId = null;
   let last = { x: 0, y: 0 };
+  let hidden = null; // {base} пока сидим в шкафу
+  let saved = null;
+
+  function applyLook(dx, dy) {
+    camera.rotation.y -= dx * sensitivity * LOOK_FACTOR;
+    camera.rotation.x -= dy * sensitivity * LOOK_FACTOR;
+    if (hidden) {
+      camera.rotation.y = Math.max(hidden.base - HIDE_YAW, Math.min(hidden.base + HIDE_YAW, camera.rotation.y));
+      camera.rotation.x = Math.max(-0.35, Math.min(0.35, camera.rotation.x));
+    } else {
+      camera.rotation.x = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, camera.rotation.x));
+    }
+  }
   canvas.addEventListener('pointerdown', (e) => {
     if (lookId !== null) return;
     const onRight = e.clientX >= window.innerWidth / 2;
@@ -127,9 +142,7 @@ export function initControls(camera, canvas, { colliders, dynamicColliders = [],
     const dx = e.clientX - last.x;
     const dy = e.clientY - last.y;
     last = { x: e.clientX, y: e.clientY };
-    camera.rotation.y -= dx * sensitivity * LOOK_FACTOR;
-    camera.rotation.x -= dy * sensitivity * LOOK_FACTOR;
-    camera.rotation.x = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, camera.rotation.x));
+    applyLook(dx, dy);
   });
   const lookUp = (e) => {
     if (e.pointerId === lookId) lookId = null;
@@ -157,6 +170,10 @@ export function initControls(camera, canvas, { colliders, dynamicColliders = [],
     isBlocked(colliders, x, z, PLAYER_RADIUS) || isBlocked(dynamicColliders, x, z, PLAYER_RADIUS);
 
   function update(dt) {
+    if (hidden) {
+      camera.position.y = HIDE_EYE;
+      return;
+    }
     const mag = Math.min(1, Math.hypot(stick.x, stick.y));
     if (mag > 0.05) {
       // вперёд = вверх по экрану; та же формула, что yaw + atan2(y, x), в явном виде
@@ -188,6 +205,27 @@ export function initControls(camera, canvas, { colliders, dynamicColliders = [],
     lookId = null;
   }
 
+  function hide({ x, z, yaw }) {
+    saved = { x: camera.position.x, z: camera.position.z, yaw: camera.rotation.y, pitch: camera.rotation.x };
+    reset();
+    hidden = { base: yaw };
+    camera.position.set(x, HIDE_EYE, z);
+    camera.rotation.set(0, yaw, 0);
+    base.style.display = 'none';
+    buttons.style.display = 'none';
+  }
+
+  // возврат на позицию перед шкафом
+  function show() {
+    if (!hidden) return;
+    hidden = null;
+    camera.position.set(saved.x, MODES[mode].eye, saved.z);
+    camera.rotation.set(saved.pitch, saved.yaw, 0);
+    eye = MODES[mode].eye;
+    base.style.display = '';
+    buttons.style.display = '';
+  }
+
   function dispose() {
     window.removeEventListener('pointerup', globalUp);
     window.removeEventListener('pointercancel', globalUp);
@@ -197,5 +235,5 @@ export function initControls(camera, canvas, { colliders, dynamicColliders = [],
     buttons.remove();
   }
 
-  return { update, reset, applyLayout, getState, dispose };
+  return { update, reset, applyLayout, getState, look: applyLook, hide, show, isHidden: () => !!hidden, dispose };
 }
