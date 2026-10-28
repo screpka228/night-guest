@@ -50,12 +50,12 @@ export function initScene(canvas) {
   const basic = (color, extra = {}) => new THREE.MeshBasicMaterial({ color, ...extra });
 
   // --- освещение ---
-  scene.add(new THREE.AmbientLight(0x111122, 0.35));
+  scene.add(new THREE.AmbientLight(0x222233, 0.6));
   const moon = new THREE.DirectionalLight(0x334466, 0.4);
   moon.position.set(-10, 8, -10); // из окна спальни, с северо-запада
   scene.add(moon);
 
-  const flashlight = new THREE.SpotLight(0xffffff, 1.5, 8, Math.PI / 6, 0.3, 1);
+  const flashlight = new THREE.SpotLight(0xffffff, 2.5, 10, Math.PI / 4, 0.3, 1);
   flashlight.position.set(0, 0, 0);
   flashlight.target.position.set(0, 0, -1);
   camera.add(flashlight);

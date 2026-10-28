@@ -1,12 +1,17 @@
 import { getSensitivity, getJoystickSize, getControlsSide } from '../data/settings.js';
 
-const WALK_SPEED = 1.5;
+const MODES = {
+  walk:   { speed: 1.5, noise: 1,   eye: 1.6 },
+  run:    { speed: 3.0, noise: 3,   eye: 1.6 },
+  crouch: { speed: 0.6, noise: 0.3, eye: 1.2 } // камера ниже на 0.4 м
+};
+const LOOK_FACTOR = 0.006;
+const DOUBLE_TAP_MS = 300;
 const PLAYER_RADIUS = 0.3;
-const EYE_HEIGHT = 1.6;
 const THUMB_MAX = 40;
 const PITCH_LIMIT = Math.PI / 3;
 
-export function initControls(camera, canvas, { colliders, container }) {
+export function initControls(camera, canvas, { colliders, container, onModeChange }) {
   let sensitivity = getSensitivity();
   let side = getControlsSide();
 
@@ -17,6 +22,26 @@ export function initControls(camera, canvas, { colliders, container }) {
   base.appendChild(thumb);
   container.appendChild(base);
 
+  // --- режимы движения ---
+  let mode = 'walk';
+  let eye = MODES.walk.eye;
+
+  const buttons = document.createElement('div');
+  buttons.className = 'mode-buttons';
+  buttons.innerHTML = '<button class="mode-btn" data-mode="run">Бег</button><button class="mode-btn" data-mode="crouch">Присесть</button>';
+  container.appendChild(buttons);
+
+  function setMode(next) {
+    mode = mode === next ? 'walk' : next; // повторное нажатие возвращает шаг
+    buttons.querySelectorAll('.mode-btn').forEach((b) => {
+      b.className = 'mode-btn' + (b.dataset.mode === mode ? ' active-' + mode : '');
+    });
+    onModeChange?.(mode, MODES[mode]);
+  }
+  buttons.querySelectorAll('.mode-btn').forEach((b) =>
+    b.addEventListener('click', () => setMode(b.dataset.mode))
+  );
+
   function applyLayout() {
     sensitivity = getSensitivity();
     side = getControlsSide();
@@ -24,11 +49,15 @@ export function initControls(camera, canvas, { colliders, container }) {
     base.style.width = base.style.height = size + 'px';
     base.style.left = side === 'left' ? 'calc(24px + env(safe-area-inset-left))' : 'auto';
     base.style.right = side === 'right' ? 'calc(24px + env(safe-area-inset-right))' : 'auto';
+    // кнопки режимов — на противоположной стороне от джойстика
+    buttons.style.left = side === 'right' ? 'calc(24px + env(safe-area-inset-left))' : 'auto';
+    buttons.style.right = side === 'left' ? 'calc(24px + env(safe-area-inset-right))' : 'auto';
   }
   applyLayout();
 
   // --- джойстик ---
   let stickId = null;
+  let lastTap = 0;
   let center = { x: 0, y: 0 };
   const stick = { x: 0, y: 0 }; // -1..1, y вниз по экрану
 
@@ -54,6 +83,13 @@ export function initControls(camera, canvas, { colliders, container }) {
   }
   base.addEventListener('pointerdown', (e) => {
     if (stickId !== null) return;
+    const now = performance.now();
+    if (now - lastTap < DOUBLE_TAP_MS) {
+      setMode('run'); // двойной тап по джойстику
+      lastTap = 0;
+    } else {
+      lastTap = now;
+    }
     stickId = e.pointerId;
     base.setPointerCapture(e.pointerId);
     const r = base.getBoundingClientRect();
@@ -85,8 +121,8 @@ export function initControls(camera, canvas, { colliders, container }) {
     const dx = e.clientX - last.x;
     const dy = e.clientY - last.y;
     last = { x: e.clientX, y: e.clientY };
-    camera.rotation.y -= dx * sensitivity * 0.002;
-    camera.rotation.x -= dy * sensitivity * 0.002;
+    camera.rotation.y -= dx * sensitivity * LOOK_FACTOR;
+    camera.rotation.x -= dy * sensitivity * LOOK_FACTOR;
     camera.rotation.x = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, camera.rotation.x));
   });
   const lookUp = (e) => {
@@ -118,14 +154,20 @@ export function initControls(camera, canvas, { colliders, container }) {
       const dirX = -Math.sin(yaw) * fwd + Math.cos(yaw) * right;
       const dirZ = -Math.cos(yaw) * fwd - Math.sin(yaw) * right;
       const len = Math.hypot(dirX, dirZ) || 1;
-      const step = WALK_SPEED * mag * dt;
+      const step = MODES[mode].speed * mag * dt;
       const nx = camera.position.x + (dirX / len) * step;
       const nz = camera.position.z + (dirZ / len) * step;
       // скольжение вдоль стен: оси проверяются отдельно
       if (!blocked(nx, camera.position.z)) camera.position.x = nx;
       if (!blocked(camera.position.x, nz)) camera.position.z = nz;
     }
-    camera.position.y = EYE_HEIGHT;
+    eye += (MODES[mode].eye - eye) * Math.min(1, dt * 10);
+    camera.position.y = eye;
+  }
+
+  // текущее состояние для шума и HUD
+  function getState() {
+    return { mode, noise: MODES[mode].noise, moving: Math.hypot(stick.x, stick.y) > 0.05 };
   }
 
   function reset() {
@@ -135,7 +177,8 @@ export function initControls(camera, canvas, { colliders, container }) {
 
   function dispose() {
     base.remove();
+    buttons.remove();
   }
 
-  return { update, reset, applyLayout, dispose };
+  return { update, reset, applyLayout, getState, dispose };
 }

@@ -5,6 +5,7 @@ import { createGameState, resetGameState, pauseGame, resumeGame } from '../data/
 import { initScene, resizeScene, disposeScene } from '../three/scene.js';
 import { initControls } from '../three/controls.js';
 import { createLoop } from '../three/render.js';
+import { updateNoise, clearNoise, noiseEvents, noiseLevel } from '../game/noise.js';
 import { mountPause } from './pause.js';
 
 export function mountGame(root) {
@@ -16,24 +17,48 @@ export function mountGame(root) {
     <div class="screen game">
       <canvas id="game-canvas"></canvas>
       <div class="hud">${getDifficulty().name} · Попытки: ${attempts === Infinity ? '∞' : attempts}</div>
+      <div class="noise-meter" data-level="2"><i></i><i></i><i></i></div>
       <button class="pause-btn" data-pause aria-label="Пауза">⏸</button>
     </div>`;
   const screen = root.querySelector('.game');
   const canvas = root.querySelector('canvas');
+
+  const meter = root.querySelector('.noise-meter');
+  const showNoise = (noise) => {
+    meter.dataset.level = noiseLevel(noise);
+  };
+  showNoise(1);
+  clearNoise();
+  const debug = new URLSearchParams(location.search).has('debug');
+  let logAcc = 0;
 
   let three = null;
   let controls = null;
   let loop = null;
   try {
     three = initScene(canvas);
-    controls = initControls(three.camera, canvas, { colliders: three.colliders, container: screen });
+    controls = initControls(three.camera, canvas, {
+      colliders: three.colliders,
+      container: screen,
+      onModeChange: (_mode, m) => showNoise(m.noise)
+    });
     loop = createLoop({
       renderer: three.renderer,
       scene: three.scene,
       camera: three.camera,
       controls,
       container: screen,
-      debug: new URLSearchParams(location.search).has('debug')
+      debug,
+      onFrame: (dt) => {
+        const s = controls.getState();
+        updateNoise(dt, { x: three.camera.position.x, z: three.camera.position.z, moving: s.moving, noise: s.noise });
+        logAcc += dt;
+        if (debug && logAcc >= 1) {
+          logAcc = 0;
+          console.log('noise events:', noiseEvents.length);
+        }
+      },
+      debugText: () => `noise=${noiseEvents.length}`
     });
     loop.start();
   } catch (err) {
@@ -74,6 +99,7 @@ export function mountGame(root) {
     loop?.dispose();
     controls?.dispose();
     if (three) disposeScene(three);
+    clearNoise();
     resetGameState();
   };
 }

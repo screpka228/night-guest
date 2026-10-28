@@ -25,7 +25,7 @@ export function mountSettingsPanel(parent, { onBack, onContinue }) {
       <h2>Настройки</h2>
       <div class="field">
         <label>Чувствительность камеры: <span data-sens-val>${sens.toFixed(1)}</span></label>
-        <input type="range" min="0.5" max="2" step="0.1" value="${sens}" data-sens />
+        <input type="range" min="1" max="4" step="0.1" value="${sens}" data-sens />
       </div>
       <div class="field">
         <label>Размер джойстика</label>

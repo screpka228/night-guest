@@ -22,7 +22,7 @@ function write(key, value) {
 
 export function getSensitivity() {
   const v = parseFloat(read(KEYS.sensitivity));
-  return Number.isFinite(v) ? Math.min(2, Math.max(0.5, v)) : 1;
+  return Number.isFinite(v) ? Math.min(4, Math.max(1, v)) : 2;
 }
 
 export function setSensitivity(v) {
