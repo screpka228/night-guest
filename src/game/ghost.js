@@ -12,10 +12,12 @@ const SEARCH_TIME = 10;
 // Порог слышимости: шаг (1) слышен везде, кроме практики; присед (0.3) не слышен
 const HEAR_STEP = 0.9;
 const HEAR_PRACTICE = 1.5;
-const CHASE_CLOSE = 3; // шагом ближе 3 м — погоня
-const RUN_NOISE = 3;
+const RUN_NOISE = 3; // только бег переводит в погоню напрямую
+const REACTION_TIME = 1.0; // гость прислушивается, прежде чем идти на звук
+const SOUND_SPREAD = 1.5; // погрешность точки, куда он идёт на шаг (±м)
+const CLOSE_CHASE = 1.5; // investigate: игрок ближе — погоня
 
-const SPEED = { patrol: 1.0, investigate: 1.5, chase: 2.5, search: 1.0 };
+const SPEED = { patrol: 1.0, investigate: 1.2, chase: 2.0, search: 1.0 };
 
 class MinHeap {
   constructor() {
@@ -185,6 +187,8 @@ export function createGhost({ scene, colliders, rooms, difficulty, practice = fa
   let searchCenter = null;
   let lastHeard = null;
   let goal = null;
+  let listenTimer = 0;
+  let pendingTarget = null;
   let goalTimer = 0;
   let searchRoom = null;
 
@@ -219,9 +223,29 @@ export function createGhost({ scene, colliders, rooms, difficulty, practice = fa
     lastHeard = best;
     searchCenter = { x: best.x, z: best.z };
     searchRoom = roomAt(searchCenter);
-    // бег или близкий шум — погоня, иначе идём проверять звук
-    const chase = best.intensity >= RUN_NOISE || bestDist < CHASE_CLOSE;
-    setState(chase ? 'chase' : 'investigate', best);
+    const next = best.intensity >= RUN_NOISE ? 'chase' : 'investigate';
+    const idle = state === 'patrol' || state === 'search';
+    if (!idle && !(state === 'chase' && next === 'investigate')) state = next;
+    if (idle) state = next;
+    // погоня идёт точно за звуком, проверка шага — в точку с погрешностью
+    const target =
+      state === 'chase'
+        ? { x: best.x, z: best.z }
+        : {
+            x: best.x + (Math.random() * 2 - 1) * SOUND_SPREAD,
+            z: best.z + (Math.random() * 2 - 1) * SOUND_SPREAD
+          };
+    if (idle) {
+      // остановился и прислушивается
+      listenTimer = REACTION_TIME;
+      pendingTarget = target;
+      path = [];
+      idx = 0;
+    } else if (listenTimer > 0) {
+      pendingTarget = target;
+    } else {
+      goTo(target.x, target.z);
+    }
   }
 
   function move(dt, speed) {
@@ -282,8 +306,17 @@ export function createGhost({ scene, colliders, rooms, difficulty, practice = fa
     else goTo(goal.x, goal.z);
   }
 
-  function update(dt, events) {
+  function update(dt, events, player) {
     hear(events);
+    if (listenTimer > 0) {
+      listenTimer -= dt;
+      if (listenTimer <= 0) goTo(pendingTarget.x, pendingTarget.z);
+      return;
+    }
+    if (state === 'investigate' && player && Math.hypot(player.x - pos.x, player.z - pos.z) < CLOSE_CHASE) {
+      state = 'chase';
+      goTo(player.x, player.z);
+    }
     if (state === 'search') {
       searchTimer -= dt;
       if (searchTimer <= 0) {
@@ -327,5 +360,5 @@ export function createGhost({ scene, colliders, rooms, difficulty, practice = fa
     collider.z = pos.z;
   }
 
-  return { update, pos, collider, getState: () => state };
+  return { update, pos, collider, getState: () => state, isListening: () => listenTimer > 0 };
 }

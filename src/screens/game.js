@@ -81,7 +81,7 @@ export function mountGame(root) {
         const s = controls.getState();
         const p = three.camera.position;
         updateNoise(dt, { x: p.x, z: p.z, moving: s.moving, noise: s.noise });
-        ghost.update(dt, noiseEvents);
+        ghost.update(dt, noiseEvents, { x: p.x, z: p.z });
         // поимка не зависит от состояния гостя: подошёл вплотную — поймал
         if (!dead && Math.hypot(ghost.pos.x - p.x, ghost.pos.z - p.z) < CATCH_DISTANCE) {
           caught();
@@ -90,7 +90,7 @@ export function mountGame(root) {
         meter.dataset.level = noiseLevel(s.noise);
         if (devInfo) {
           const dist = Math.hypot(ghost.pos.x - p.x, ghost.pos.z - p.z);
-          devInfo.textContent = `Игрок: ${cap(s.mode)}\nГость: ${cap(ghost.getState())}  dist=${dist.toFixed(1)}`;
+          devInfo.textContent = `Игрок: ${cap(s.mode)}\nГость: ${cap(ghost.getState())}${ghost.isListening() ? ' (слушает)' : ''}  dist=${dist.toFixed(1)}`;
           logAcc += dt;
           if (logAcc >= 1) {
             logAcc = 0;
