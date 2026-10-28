@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { isBlocked } from '../three/collision.js';
 import { playCreak, playFootsteps, playScreech, startStressBreath } from './sfx.js';
 import { getBrightness } from '../data/settings.js';
+import { createGuestModel } from './guest-model.js';
 
 const GHOST_NEAR = 4; // гость ближе — стресс растёт
 const GHOST_FAR = 8; // дальше — падает
@@ -40,8 +41,6 @@ export function createHallucinations({ scene, camera, colliders, rooms, containe
 
   // ложный гость
   let fake = null;
-  const fakeMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.6 });
-  const fakeGeo = new THREE.CapsuleGeometry(0.3, 1.4);
 
   function spawnFake(player) {
     for (let k = 0; k < 30; k++) {
@@ -50,10 +49,11 @@ export function createHallucinations({ scene, camera, colliders, rooms, containe
       const z = rand(r.z1 + 0.6, r.z2 - 0.6);
       const d = Math.hypot(x - player.x, z - player.z);
       if (d < 5 || d > 14 || isBlocked(colliders, x, z, 0.3)) continue;
-      const mesh = new THREE.Mesh(fakeGeo, fakeMat.clone());
-      mesh.position.set(x, 1.0, z);
+      const model = createGuestModel({ opacity: 0.6 });
+      const mesh = model.group;
+      mesh.position.set(x, 0, z);
       scene.add(mesh);
-      fake = { mesh, x, z, life: 25, fade: 0, stuck: 0 };
+      fake = { mesh, model, x, z, life: 25, fade: 0, stuck: 0 };
       return;
     }
   }
@@ -61,7 +61,8 @@ export function createHallucinations({ scene, camera, colliders, rooms, containe
   function removeFake() {
     if (!fake) return;
     scene.remove(fake.mesh);
-    fake.mesh.material.dispose();
+    fake.mesh.traverse((o) => o.geometry?.dispose());
+    fake.model.material.dispose();
     fake = null;
   }
 
@@ -71,7 +72,7 @@ export function createHallucinations({ scene, camera, colliders, rooms, containe
     camera.getWorldDirection(dir);
     const dx = fake.x - camera.position.x;
     const dz = fake.z - camera.position.z;
-    const dy = 1.0 - camera.position.y;
+    const dy = 1.2 - camera.position.y;
     const dist = Math.hypot(dx, dy, dz);
     if (dist > 10) return false;
     const dot = (dir.x * dx + dir.y * dy + dir.z * dz) / dist;
@@ -101,7 +102,9 @@ export function createHallucinations({ scene, camera, colliders, rooms, containe
     }
     fake.stuck = moved ? 0 : fake.stuck + dt;
     if (fake.stuck > 1) fake.fade = 0.5;
-    fake.mesh.position.set(fake.x, 1.0, fake.z);
+    fake.mesh.position.set(fake.x, 0, fake.z);
+    fake.mesh.rotation.y = Math.atan2(dx, dz);
+    fake.model.animate(dt, 1.2, 0);
   }
 
   function setFilter(on) {
@@ -187,7 +190,7 @@ export function createHallucinations({ scene, camera, colliders, rooms, containe
       fake.life -= dt;
       if (fake.fade > 0) {
         fake.fade -= dt;
-        fake.mesh.material.opacity = Math.max(0, (fake.fade / 0.5) * 0.6);
+        fake.model.material.opacity = Math.max(0, (fake.fade / 0.5) * 0.6);
         if (fake.fade <= 0) removeFake();
       } else {
         moveFake(dt, player);
@@ -202,8 +205,6 @@ export function createHallucinations({ scene, camera, colliders, rooms, containe
     clearTimeout(scareTimeout);
     scareEl?.remove();
     removeFake();
-    fakeGeo.dispose();
-    fakeMat.dispose();
     vignette.remove();
     setFilter(false);
   }

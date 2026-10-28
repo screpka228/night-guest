@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { woodFloor, concreteWall, wallpaper } from './textures.js';
 
 const WALL_T = 0.15;
 const WALL_H = 2.7;
@@ -36,7 +35,7 @@ const WALLS = [
   [false, -1.5, -4.25, -1.25], [false, 1.5, -4.25, -1.25]
 ];
 
-export function initScene(canvas) {
+export function initScene(canvas, textures = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.setSize(window.innerWidth, window.innerHeight, false);
@@ -67,7 +66,7 @@ export function initScene(canvas) {
   moon.position.set(-10, 8, -10); // из окна спальни, с северо-запада
   scene.add(moon);
 
-  const flashlight = new THREE.SpotLight(0xffffff, 2.5, 10, Math.PI / 4, 0.3, 1);
+  const flashlight = new THREE.SpotLight(0xffe2a8, 2.5, 10, Math.PI / 4, 0.3, 1) // тёплый жёлтоватый фонарик;
   flashlight.position.set(0, 0, 0);
   flashlight.castShadow = true;
   flashlight.shadow.mapSize.set(512, 512);
@@ -79,9 +78,7 @@ export function initScene(canvas) {
   camera.add(flashlight.target);
 
   // --- полы и потолки (процедурные текстуры) ---
-  const floorTex = woodFloor();
-  const wallTex = concreteWall();
-  const ceilMat = new THREE.MeshLambertMaterial({ map: wallpaper(), color: 0x444444 });
+  const ceilMat = new THREE.MeshLambertMaterial({ color: 0x161616 });
   const rooms = ROOM_DEFS.map((r) => ({ ...r }));
   for (const r of rooms) {
     const w = r.x2 - r.x1;
@@ -89,7 +86,7 @@ export function initScene(canvas) {
     const cx = (r.x1 + r.x2) / 2;
     const cz = (r.z1 + r.z2) / 2;
     // доски на полу, оттенок комнаты — множитель к текстуре
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshLambertMaterial({ map: floorTex, color: new THREE.Color(r.floor).multiplyScalar(2.2) }));
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshLambertMaterial({ map: (r.name === 'bedroom' ? textures.carpet : textures.wood) || null, color: new THREE.Color(r.floor).multiplyScalar(2.2) }));
     floor.rotation.x = -Math.PI / 2;
     floor.position.set(cx, 0, cz);
     scene.add(floor);
@@ -100,7 +97,8 @@ export function initScene(canvas) {
   }
 
   // --- стены с проёмами ---
-  const wallMat = new THREE.MeshLambertMaterial({ map: wallTex, color: 0xb8b0a8 });
+  const wallMat = new THREE.MeshLambertMaterial({ map: textures.brick || null });
+  wallMat.color.setHex(0x444444); // тёмный кирпич
   function wallPiece(horizontal, fixed, t1, t2, y1, y2, collide) {
     const len = t2 - t1;
     const c = (t1 + t2) / 2;

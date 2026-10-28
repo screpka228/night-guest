@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { isBlocked } from '../three/collision.js';
+import { createGuestModel } from './guest-model.js';
 
 // Сетка поиска пути: центры клеток кратны 0.2 м, поэтому лежат ровно на линиях дверей (x = ±3, z = ±1 и т.д.)
 const CELL = 0.2;
@@ -157,13 +158,11 @@ export function createGhost({ scene, colliders, rooms, difficulty, practice = fa
   }
 
   // --- модель: чёрный силуэт и тёмный круг под ним ---
-  const group = new THREE.Group();
-  const body = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.3, 1.4),
-    new THREE.MeshBasicMaterial({ color: 0x000000 })
-  );
-  body.position.y = 1.0;
-  group.add(body);
+  const model = createGuestModel();
+  const group = model.group;
+  let faceYaw = 0;
+  let lastX = start.x;
+  let lastZ = start.z;
   const shadow = new THREE.Mesh(
     new THREE.CircleGeometry(0.5, 16),
     new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.5, depthWrite: false })
@@ -317,7 +316,34 @@ export function createGhost({ scene, colliders, rooms, difficulty, practice = fa
     else goTo(goal.x, goal.z);
   }
 
+  function animateModel(dt, player) {
+    const dx = pos.x - lastX;
+    const dz = pos.z - lastZ;
+    const speed = Math.hypot(dx, dz) / Math.max(dt, 0.001);
+    lastX = pos.x;
+    lastZ = pos.z;
+    if (speed > 0.15) {
+      // корпус поворачивается по ходу движения (плавно)
+      const target = Math.atan2(dx, dz);
+      let diff = target - faceYaw;
+      diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+      faceYaw += diff * Math.min(1, dt * 6);
+      group.rotation.y = faceYaw;
+    }
+    // голова смотрит на игрока
+    let look = 0;
+    if (player) {
+      const toYaw = Math.atan2(player.x - pos.x, player.z - pos.z);
+      look = Math.atan2(Math.sin(toYaw - faceYaw), Math.cos(toYaw - faceYaw));
+    }
+    model.animate(dt, speed, look);
+  }
+
+  let lastPlayer = null;
+
   function update(dt, events, player) {
+    if (player) lastPlayer = player;
+    if (!disabled) animateModel(dt, lastPlayer);
     if (disabled) return;
     if (freezeTimer > 0) {
       freezeTimer -= dt;

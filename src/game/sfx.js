@@ -1,36 +1,9 @@
-import { getAudioContext } from './audio.js';
+import { getAudioContext, hasSample, playSample, scream } from './audio.js';
 let ctx = null;
 
 // Скример: короткий громкий шум + падающий тон
 export function playScream() {
-  try {
-    ctx = ctx || getAudioContext();
-    if (ctx.state === 'suspended') ctx.resume();
-    const dur = 1.2;
-    const now = ctx.currentTime;
-
-    const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * dur), ctx.sampleRate);
-    const data = buf.getChannelData(0);
-    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
-    const noise = ctx.createBufferSource();
-    noise.buffer = buf;
-
-    const gain = ctx.createGain();
-    gain.gain.setValueAtTime(1, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
-
-    const osc = ctx.createOscillator();
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(900, now);
-    osc.frequency.exponentialRampToValueAtTime(120, now + dur);
-
-    noise.connect(gain);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    noise.start(now);
-    osc.start(now);
-    osc.stop(now + dur);
-  } catch {}
+  scream();
 }
 
 // Затаённое дыхание: тихий фильтрованный шум с медленной пульсацией; возвращает функцию остановки
@@ -72,8 +45,12 @@ export function startBreathSound() {
   }
 }
 
-// Скрип двери: низкий пилообразный тон с дрожанием
+// Скрип двери: настоящий семпл (запасной вариант — синтез)
 export function playCreak() {
+  if (hasSample('creak')) {
+    playSample('creak', { volume: 0.9, duration: 2.2 });
+    return;
+  }
   try {
     ctx = ctx || getAudioContext();
     if (ctx.state === 'suspended') ctx.resume();
@@ -193,6 +170,10 @@ export function playTrap() {
 
 // Ложные шаги за спиной (только звук, без меток шума)
 export function playFootsteps() {
+  if (hasSample('footsteps')) {
+    playSample('footsteps', { volume: 0.9, pan: Math.random() < 0.5 ? -0.6 : 0.6, rate: 0.9 });
+    return;
+  }
   try {
     ctx = ctx || getAudioContext();
     if (ctx.state === 'suspended') ctx.resume();

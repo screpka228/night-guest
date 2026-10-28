@@ -21,6 +21,7 @@ import { mountEndingD, mountEndingA, mountEndingC, mountCredits } from './gameov
 import { spawnContents } from '../game/spawn.js';
 import { createSpots } from '../game/spots.js';
 import { createHallucinations } from '../game/hallucinations.js';
+import { assets, preloadAssets } from '../game/assets.js';
 
 const CATCH_DISTANCE = 1.2;
 const NIGHT_LENGTH = 300; // 5 минут игрового времени (без пауз)
@@ -146,8 +147,17 @@ export function mountGame(root) {
   let controls = null;
   let ghost = null;
   let loop = null;
+  let disposed = false;
+
+  // игра стартует только после загрузки текстур и звуков (LoadingManager)
+  const loading = document.createElement('div');
+  loading.className = 'loading';
+  loading.textContent = 'Загрузка… 0%';
+  screen.appendChild(loading);
+
+  function boot() {
   try {
-    three = initScene(canvas);
+    three = initScene(canvas, assets.textures || {});
     const practice = getDifficultyKey() === 'practice';
     ghost = createGhost({
       scene: three.scene,
@@ -346,6 +356,15 @@ export function mountGame(root) {
     console.error(err);
     screen.insertAdjacentHTML('beforeend', '<div class="hud-error">WebGL недоступен</div>');
   }
+  }
+
+  preloadAssets((p) => {
+    loading.textContent = `Загрузка… ${Math.round(p * 100)}%`;
+  }).then(() => {
+    if (disposed) return;
+    loading.remove();
+    boot();
+  });
 
   const onResize = () => three && resizeScene(three);
   window.addEventListener('resize', onResize);
@@ -377,6 +396,7 @@ export function mountGame(root) {
   root.querySelector('[data-pause]').addEventListener('click', openPause);
 
   return () => {
+    disposed = true;
     window.removeEventListener('resize', onResize);
     pause?.destroy();
     stopAmbient();

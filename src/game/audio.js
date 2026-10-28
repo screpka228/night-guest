@@ -1,4 +1,5 @@
-// Процедурный звук на Web Audio API: гул, сердцебиение, шёпот, шаги, скример. Без файлов.
+// Звук на Web Audio API: настоящие семплы (loadSound + звуковая шина) и процедурный гул/сердцебиение;
+// если семпл не загрузился, играет синтез.
 let ctx = null;
 let master = null;
 let drone = null;
@@ -6,6 +7,8 @@ let heartTimer = 0;
 let playerStepTimer = 0;
 let ghostStepTimer = 0;
 let noiseBuf = null;
+const samples = {};
+let bus = null; // звуковая шина: sfx / amb / voice → master
 
 export function getAudioContext() {
   if (!ctx) {
@@ -13,6 +16,12 @@ export function getAudioContext() {
     master = ctx.createGain();
     master.gain.value = 1;
     master.connect(ctx.destination);
+    bus = {};
+    for (const [name, vol] of [['sfx', 1], ['amb', 0.7], ['voice', 1]]) {
+      bus[name] = ctx.createGain();
+      bus[name].gain.value = vol;
+      bus[name].connect(master);
+    }
   }
   return ctx;
 }
@@ -36,6 +45,60 @@ export function resumeAudio() {
   } catch {}
 }
 
+// загрузка звука: fetch + decodeAudioData
+export async function loadSound(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('sound ' + url + ' ' + res.status);
+  const data = await res.arrayBuffer();
+  return getAudioContext().decodeAudioData(data);
+}
+
+export function registerSample(name, buffer) {
+  samples[name] = buffer;
+}
+
+export const hasSample = (name) => !!samples[name];
+
+// Проиграть семпл через шину с громкостью и панорамой; echo — эхо (для шагов гостя)
+export function playSample(name, { volume = 1, pan = 0, rate = 1, bus: busName = 'sfx', offset = 0, duration, loop = false, echo = false } = {}) {
+  const buf = samples[name];
+  if (!buf) return null;
+  try {
+    const c = getAudioContext();
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = rate;
+    src.loop = loop;
+    const g = c.createGain();
+    g.gain.value = volume;
+    src.connect(g);
+    let tail = g;
+    if (c.createStereoPanner) {
+      const p = c.createStereoPanner();
+      p.pan.value = pan;
+      g.connect(p);
+      tail = p;
+    }
+    tail.connect(bus[busName]);
+    if (echo) {
+      const delay = c.createDelay(0.5);
+      delay.delayTime.value = 0.2;
+      const fb = c.createGain();
+      fb.gain.value = 0.35;
+      tail.connect(delay);
+      delay.connect(fb);
+      fb.connect(delay);
+      delay.connect(bus[busName]);
+    }
+    const dur = duration ?? Math.max(0.01, buf.duration - offset);
+    if (loop) src.start(0, offset);
+    else src.start(0, offset, dur);
+    return src;
+  } catch {
+    return null;
+  }
+}
+
 function noiseBuffer() {
   const c = getAudioContext();
   if (!noiseBuf) {
@@ -48,7 +111,7 @@ function noiseBuffer() {
 
 const out = () => {
   getAudioContext();
-  return master;
+  return bus.sfx;
 };
 
 // Фоновый гул: sawtooth 40 и 55 Гц → lowpass 150 Гц → gain 0.05, «дышит» от медленного LFO
@@ -75,11 +138,41 @@ export function startDrone() {
     o1.connect(filter);
     o2.connect(filter);
     filter.connect(g);
-    g.connect(out());
+    g.connect(bus.amb);
     o1.start();
     o2.start();
     lfo.start();
-    drone = { o1, o2, lfo, g };
+    // сквозняк: шум через bandpass, частота и громкость плавно гуляют
+    const wind = c.createBufferSource();
+    wind.buffer = noiseBuffer();
+    wind.loop = true;
+    const wf = c.createBiquadFilter();
+    wf.type = 'bandpass';
+    wf.frequency.value = 350;
+    wf.Q.value = 0.8;
+    const wg = c.createGain();
+    wg.gain.value = 0.05;
+    const wl = c.createOscillator();
+    wl.frequency.value = 0.07;
+    const wlg = c.createGain();
+    wlg.gain.value = 0.035;
+    const wl2 = c.createOscillator();
+    wl2.frequency.value = 0.05;
+    const wl2g = c.createGain();
+    wl2g.gain.value = 150;
+    wl.connect(wlg);
+    wlg.connect(wg.gain);
+    wl2.connect(wl2g);
+    wl2g.connect(wf.frequency);
+    wind.connect(wf);
+    wf.connect(wg);
+    wg.connect(bus.amb);
+    wind.start();
+    wl.start();
+    wl2.start();
+    // тёмный эмбиент-слой под всем (если загружен)
+    const amb = playSample('ambience', { volume: 0.25, loop: true, bus: 'amb' });
+    drone = { o1, o2, lfo, g, wind, wl, wl2, wg, amb };
   } catch {}
 }
 
@@ -90,6 +183,11 @@ export function stopAmbient() {
       drone.o2.stop();
       drone.lfo.stop();
       drone.g.disconnect();
+      drone.wind.stop();
+      drone.wl.stop();
+      drone.wl2.stop();
+      drone.wg.disconnect();
+      drone.amb?.stop();
       drone = null;
     }
   } catch {}
@@ -113,7 +211,23 @@ function beat(at, vol) {
 }
 
 // Шаг: шум 0.05 с через lowpass; у гостя ниже, громче и с эхом (DelayNode)
+// onset'ы шагов в семпле footsteps.wav (секунды)
+const STEP_ONSETS = [0.2, 1.1, 2.15, 3.25, 4.4];
+
 export function step({ ghost = false, volume = 0.3, pan = 0 } = {}) {
+  // настоящий шаг из семпла; у гостя ниже по тону, громче и с эхом
+  if (hasSample('footsteps')) {
+    const off = STEP_ONSETS[(Math.random() * STEP_ONSETS.length) | 0];
+    playSample('footsteps', {
+      volume: volume * (ghost ? 1.6 : 1.2),
+      pan,
+      rate: ghost ? 0.7 : 1,
+      offset: off,
+      duration: 0.5,
+      echo: ghost
+    });
+    return;
+  }
   try {
     const c = getAudioContext();
     const now = c.currentTime;
@@ -151,6 +265,12 @@ export function step({ ghost = false, volume = 0.3, pan = 0 } = {}) {
 
 // Шёпот: белый шум → bandpass 1000 Гц, Q=5 → панорама влево/вправо
 export function whisper() {
+  if (hasSample('whisper')) {
+    const buf = samples.whisper;
+    const off = Math.random() * Math.max(0, buf.duration - 2);
+    playSample('whisper', { volume: 0.8, pan: Math.random() < 0.5 ? -0.8 : 0.8, offset: off, duration: 2, bus: 'voice' });
+    return;
+  }
   try {
     const c = getAudioContext();
     const now = c.currentTime;
@@ -182,6 +302,14 @@ export function whisper() {
 
 // Скример при поимке: square 800 → 100 Гц за 0.5 с и всплеск белого шума
 export function scream() {
+  if (hasSample('scream')) {
+    try {
+      if (getAudioContext().state === 'suspended') getAudioContext().resume();
+    } catch {}
+    playSample('scream', { volume: 1, bus: 'voice' });
+    playSample('hit', { volume: 0.8 });
+    return;
+  }
   try {
     const c = getAudioContext();
     if (c.state === 'suspended') c.resume();
