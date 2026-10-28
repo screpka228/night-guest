@@ -1,5 +1,5 @@
 import { navigate } from '../router.js';
-import { DIFFICULTIES } from '../data/difficulty.js';
+import { DIFFICULTIES, resetAttempts } from '../data/difficulty.js';
 
 export function mountDifficulty(root) {
   const buttons = Object.entries(DIFFICULTIES)
@@ -18,6 +18,7 @@ export function mountDifficulty(root) {
     b.addEventListener('click', () => {
       try {
         localStorage.setItem('ng_difficulty', b.dataset.key);
+        resetAttempts(b.dataset.key);
       } catch {}
       navigate('game');
     })

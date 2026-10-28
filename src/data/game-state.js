@@ -1,4 +1,4 @@
-import { getDifficulty } from './difficulty.js';
+import { getDifficultyKey } from './difficulty.js';
 
 export let gameState = null;
 
@@ -7,7 +7,7 @@ export function createGameState() {
     startedAt: Date.now(),
     pausedAt: null,
     pausedDuration: 0,
-    difficulty: getDifficulty(),
+    difficulty: getDifficultyKey(),
     night: 1
   };
   return gameState;
