@@ -9,13 +9,13 @@ const DECOY_TEXT = {
 };
 
 // Интерактивные точки (ящики, тумбочки): «Открыть», звук 1, ловушка 3.5, ключи — цель игры
-export function createSpots({ scene, spots, contents, buttons, items, frontDoor, notify, onEscape }) {
+export function createSpots({ scene, camera, spots, contents, buttons, items, frontDoor, notify, onEscape }) {
   const state = { keysFound: false };
 
   const objs = spots.map((s) => {
     const mesh = new THREE.Mesh(
       new THREE.BoxGeometry(0.32, 0.16, 0.26),
-      new THREE.MeshBasicMaterial({ color: 0xa06a30 })
+      new THREE.MeshLambertMaterial({ color: 0x3a2a1c }) // обычное тёмное дерево, видно только в луче фонарика
     );
     mesh.position.set(s.x, s.y + 0.09, s.z);
     scene.add(mesh);
@@ -53,7 +53,7 @@ export function createSpots({ scene, spots, contents, buttons, items, frontDoor,
       return;
     }
     near.opened = true;
-    near.mesh.material.color.set(0x4a3018);
+    near.mesh.material.color.set(0x2a1d12);
     near.mesh.position.y -= 0.05;
 
     if (c && c.type === 'trap') {
@@ -80,14 +80,22 @@ export function createSpots({ scene, spots, contents, buttons, items, frontDoor,
     if (state.keysFound && nearFront) onEscape();
   });
 
+  const look = new THREE.Vector3();
+  const to = new THREE.Vector3();
+
+  // «Открыть» — только вплотную (1.5 м) и когда смотришь на ящик (в пределах ~35°)
   function update(player) {
     near = null;
-    let bd = OPEN_RADIUS;
+    camera.getWorldDirection(look);
+    let best = 0.82;
     for (const o of objs) {
       if (o.opened) continue;
       const d = Math.hypot(player.x - o.spot.x, player.z - o.spot.z);
-      if (d <= bd) {
-        bd = d;
+      if (d > OPEN_RADIUS) continue;
+      to.set(o.spot.x - camera.position.x, o.spot.y + 0.1 - camera.position.y, o.spot.z - camera.position.z).normalize();
+      const dot = look.dot(to);
+      if (dot > best) {
+        best = dot;
         near = o;
       }
     }

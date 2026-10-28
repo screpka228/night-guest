@@ -17,6 +17,7 @@ import { mountPause } from './pause.js';
 import { mountGameOver, mountEscape } from './gameover.js';
 import { spawnContents } from '../game/spawn.js';
 import { createSpots } from '../game/spots.js';
+import { createHallucinations } from '../game/hallucinations.js';
 
 const CATCH_DISTANCE = 1.2;
 const cap = (s) => s[0].toUpperCase() + s.slice(1);
@@ -57,6 +58,7 @@ export function mountGame(root) {
   let phone = null;
   let vents = null;
   let spots = null;
+  let halluc = null;
   let keysSpot = null;
   const goalHud = root.querySelector('.goal-hud');
   let nearCloset = null;
@@ -73,6 +75,7 @@ export function mountGame(root) {
     controls?.reset();
     hiding?.dispose();
     phone?.dispose();
+    halluc?.dispose();
     hideBtn.hidden = true;
     playScream();
     navigator.vibrate?.([200, 100, 200]);
@@ -113,8 +116,18 @@ export function mountGame(root) {
     });
     const spawned = spawnContents(three.spots);
     keysSpot = spawned.keysSpot;
+    halluc = createHallucinations({
+      scene: three.scene,
+      camera: three.camera,
+      colliders: three.colliders,
+      rooms: three.rooms,
+      container: screen,
+      canvas,
+      difficulty: getDifficulty()
+    });
     spots = createSpots({
       scene: three.scene,
+      camera: three.camera,
       spots: three.spots,
       contents: spawned.contents,
       buttons: controls.modeButtons,
@@ -127,6 +140,7 @@ export function mountGame(root) {
         controls?.reset();
         hiding?.dispose();
         phone?.dispose();
+        halluc?.dispose();
         hideBtn.hidden = true;
         gameOver = mountEscape(screen);
       }
@@ -134,7 +148,7 @@ export function mountGame(root) {
     vents = createVents({ vents: three.vents, camera: three.camera, controls, container: screen });
     phone = createPhone({ container: screen, difficulty: getDifficulty() });
     hiding = createHiding({ container: screen, camera: three.camera, controls, onCaught: caught });
-    if (debug) window.__ng = { camera: three.camera, ghost, colliders: three.colliders, noiseEvents, hiding, doors, items, phone, vents, spots, spawned, difficulty: getDifficulty() };
+    if (debug) window.__ng = { camera: three.camera, ghost, colliders: three.colliders, noiseEvents, hiding, doors, items, phone, vents, spots, halluc, spawned, difficulty: getDifficulty() };
     loop = createLoop({
       renderer: three.renderer,
       scene: three.scene,
@@ -151,6 +165,7 @@ export function mountGame(root) {
         doors.update(dt, { x: p.x, z: p.z });
         items.update(dt, { x: p.x, z: p.z });
         spots.update({ x: p.x, z: p.z });
+        halluc.update(dt, { player: { x: p.x, z: p.z }, ghost, hidingActive: hiding.active, phoneRinging: phone.ringing });
         goalHud.textContent = spots.state.keysFound ? 'Беги к выходу!' : 'Обыщи квартиру';
         phone.update(dt, { x: p.x, z: p.z });
         ghost.update(dt, noiseEvents, hiding.active ? null : { x: p.x, z: p.z });
@@ -177,6 +192,7 @@ export function mountGame(root) {
           const last = noiseEvents[noiseEvents.length - 1];
           devInfo.textContent =
             `Игрок: ${cap(s.mode)}\n${hiding.active ? 'В шкафу, ' : ''}Гость: ${cap(ghost.getState())}${ghost.isListening() ? ' (слушает)' : ''}  dist=${dist.toFixed(1)}` +
+            `\nСтресс: ${Math.round(halluc.stress)}` +
             `\nКлючи: точка #${keysSpot.id} (${keysSpot.room})` +
             `\nВ руках: ${items.state.heldItem ? items.state.heldItem.type : 'пусто'}` +
             `\nМетки шума: ${noiseEvents.length}` +
@@ -230,6 +246,7 @@ export function mountGame(root) {
     hiding?.dispose();
     items?.dispose();
     spots?.dispose();
+    halluc?.dispose();
     vents?.dispose();
     phone?.dispose();
     loop?.dispose();

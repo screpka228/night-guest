@@ -189,3 +189,102 @@ export function playTrap() {
   playImpact();
   playScream();
 }
+
+// Ложные шаги за спиной (только звук, без меток шума)
+export function playFootsteps() {
+  try {
+    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state === 'suspended') ctx.resume();
+    const t0 = ctx.currentTime + 0.05;
+    const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+    if (pan) {
+      pan.pan.value = Math.random() < 0.5 ? -0.6 : 0.6;
+      pan.connect(ctx.destination);
+    }
+    const out = pan || ctx.destination;
+    for (let i = 0; i < 6; i++) {
+      const t = t0 + i * 0.5;
+      const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.12), ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let k = 0; k < d.length; k++) d[k] = Math.random() * 2 - 1;
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const f = ctx.createBiquadFilter();
+      f.type = 'lowpass';
+      f.frequency.value = 300;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.5 - i * 0.05, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+      src.connect(f);
+      f.connect(g);
+      g.connect(out);
+      src.start(t);
+    }
+  } catch {}
+}
+
+// Скрежет ложного скримера
+export function playScreech() {
+  try {
+    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state === 'suspended') ctx.resume();
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(1800, now);
+    osc.frequency.exponentialRampToValueAtTime(300, now + 0.5);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.7, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.65);
+  } catch {}
+}
+
+// Дыхание под стрессом: setLevel(0..1) делает его громче и чаще
+export function startStressBreath() {
+  try {
+    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state === 'suspended') ctx.resume();
+    const buf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 600;
+    const gain = ctx.createGain();
+    gain.gain.value = 0.05;
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 0.8;
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.value = 0.04;
+    lfo.connect(lfoGain);
+    lfoGain.connect(gain.gain);
+    src.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    src.start();
+    lfo.start();
+    return {
+      setLevel(v) {
+        gain.gain.value = 0.05 + 0.12 * v;
+        lfoGain.gain.value = 0.04 + 0.1 * v;
+        lfo.frequency.value = 0.8 + 1.2 * v;
+      },
+      stop() {
+        try {
+          src.stop();
+          lfo.stop();
+          gain.disconnect();
+        } catch {}
+      }
+    };
+  } catch {
+    return { setLevel() {}, stop() {} };
+  }
+}
