@@ -1,0 +1,89 @@
+name: Release APK
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Release name
+        id: ver
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "name=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            # ручной запуск без тега: v<версия>-run<номер>
+            echo "name=v$(node -p "require('./package.json').version")-run${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - run: npm ci
+      - run: npm run build
+      - run: npx cap add android
+      - run: npx cap sync android
+      - name: Android base patch (vibrate, landscape, version)
+        run: node scripts/android-patch.mjs base
+
+      - name: Decode keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::error::Секрет ANDROID_KEYSTORE_BASE64 не задан."
+            exit 1
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > android/app/release.keystore
+          chmod 600 android/app/release.keystore
+
+      - name: Inject signing config
+        run: node scripts/android-patch.mjs signing
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Build signed APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease
+
+      - name: Rename APK
+        run: |
+          mkdir -p artifacts
+          cp android/app/build/outputs/apk/release/app-release.apk \
+             artifacts/night-guest-${{ steps.ver.outputs.name }}.apk
+
+      - name: Cleanup keystore
+        if: always()
+        run: rm -f android/app/release.keystore
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.name }}
+          files: artifacts/night-guest-${{ steps.ver.outputs.name }}.apk
+          generate_release_notes: true
+          body: |
+            ## Ночной гость ${{ steps.ver.outputs.name }}
+
+            Первая подписанная сборка. Скачайте APK и установите на телефон.
+
+            **Установка:**
+            1. Скачать `night-guest-${{ steps.ver.outputs.name }}.apk`.
+            2. Разрешить установку из неизвестных источников.
+            3. Открыть APK.
