@@ -58,7 +58,8 @@ export function initScene(canvas) {
   const basic = (color, extra = {}) => new THREE.MeshBasicMaterial({ color, ...extra });
 
   // --- освещение ---
-  scene.add(new THREE.AmbientLight(0x222233, 0.6));
+  const ambient = new THREE.AmbientLight(0x222233, 0.6);
+  scene.add(ambient);
   const moon = new THREE.DirectionalLight(0x334466, 0.4);
   moon.position.set(-10, 8, -10); // из окна спальни, с северо-запада
   scene.add(moon);
@@ -267,7 +268,7 @@ export function initScene(canvas) {
     for (const c of doors) doorways.push(horizontal ? { x: c, z: fixed, horizontal } : { x: fixed, z: c, horizontal });
   }
 
-  return { scene, camera, renderer, rooms, colliders, closets, doorways, vents, frontDoor, spots };
+  return { scene, camera, renderer, rooms, colliders, closets, doorways, vents, frontDoor, spots, ambient };
 }
 
 export function resizeScene({ camera, renderer }) {

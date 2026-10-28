@@ -430,3 +430,34 @@ input[type='range']::-moz-range-thumb {
 .scare .eye.l { left: 20%; }
 .scare .eye.r { right: 20%; }
 .scare .mouth { position: absolute; left: 30%; right: 30%; top: 62%; height: 22%; border-radius: 50%; background: #000; }
+
+.card {
+  position: absolute;
+  inset: 0;
+  z-index: 145;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  font-size: 22px;
+  line-height: 1.4;
+  color: #d0d0d0;
+  background: rgba(0, 0, 0, 0.94);
+  animation: cardin 0.6s ease-out;
+  touch-action: none;
+}
+@keyframes cardin { from { opacity: 0; } to { opacity: 1; } }
+.white-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 148;
+  background: #fff;
+  pointer-events: none;
+  animation: whiteflash 1.2s ease-in forwards;
+}
+@keyframes whiteflash { from { opacity: 0; } to { opacity: 1; } }
+.overlay-lose { animation: loseflash 1.2s ease-out forwards; background: #2a0000; }
+@keyframes loseflash { 0% { background: #d00000; } 100% { background: #2a0000; } }
+.overlay-dawn .dead-box { color: #f0b070; }
+.dead-box .dim { color: #888; font-size: 14px; }

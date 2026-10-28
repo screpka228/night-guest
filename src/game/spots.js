@@ -9,7 +9,7 @@ const DECOY_TEXT = {
 };
 
 // Интерактивные точки (ящики, тумбочки): «Открыть», звук 1, ловушка 3.5, ключи — цель игры
-export function createSpots({ scene, camera, spots, contents, buttons, items, frontDoor, notify, onEscape }) {
+export function createSpots({ onKeys, scene, camera, spots, contents, buttons, items, frontDoor, notify, onEscape }) {
   const state = { keysFound: false };
 
   const objs = spots.map((s) => {
@@ -69,6 +69,7 @@ export function createSpots({ scene, camera, spots, contents, buttons, items, fr
     } else if (c.type === 'keys') {
       state.keysFound = true;
       notify('Вы нашли ключи! Бегите к двери!');
+      onKeys?.();
     } else if (DECOY_TEXT[c.type]) {
       notify(DECOY_TEXT[c.type]);
     } else {

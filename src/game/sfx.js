@@ -288,3 +288,52 @@ export function startStressBreath() {
     return { setLevel() {}, stop() {} };
   }
 }
+
+// Глухой удар сердца: три «тум-тум»
+export function playHeartbeat() {
+  try {
+    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state === 'suspended') ctx.resume();
+    const t0 = ctx.currentTime + 0.05;
+    for (let i = 0; i < 3; i++) {
+      for (const off of [0, 0.25]) {
+        const t = t0 + i * 1.4 + off;
+        const osc = ctx.createOscillator();
+        osc.frequency.setValueAtTime(70, t);
+        osc.frequency.exponentialRampToValueAtTime(40, t + 0.15);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.9, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+        osc.connect(g);
+        g.connect(ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.22);
+      }
+    }
+  } catch {}
+}
+
+// Замок входной двери: два щелчка
+export function playLock() {
+  try {
+    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state === 'suspended') ctx.resume();
+    const t0 = ctx.currentTime;
+    for (const off of [0, 0.22]) {
+      const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.05), ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const f = ctx.createBiquadFilter();
+      f.type = 'highpass';
+      f.frequency.value = 1500;
+      const g = ctx.createGain();
+      g.gain.value = 0.8;
+      src.connect(f);
+      f.connect(g);
+      g.connect(ctx.destination);
+      src.start(t0 + off);
+    }
+  } catch {}
+}

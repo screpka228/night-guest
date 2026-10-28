@@ -28,6 +28,7 @@ export function initControls(camera, canvas, { colliders, dynamicColliders = [],
   // --- режимы движения ---
   let mode = 'walk';
   let eye = MODES.walk.eye;
+  let cutscene = false; // кат-сцена: управление отключено
   let eyeOverride = null; // в вентиляции камера ещё ниже
 
   const buttons = document.createElement('div');
@@ -171,6 +172,10 @@ export function initControls(camera, canvas, { colliders, dynamicColliders = [],
     isBlocked(colliders, x, z, PLAYER_RADIUS) || isBlocked(dynamicColliders, x, z, PLAYER_RADIUS);
 
   function update(dt) {
+    if (cutscene && !hidden) {
+      endStick();
+      return;
+    }
     if (hidden) {
       camera.position.y = hidden.eye;
       return;
@@ -236,5 +241,5 @@ export function initControls(camera, canvas, { colliders, dynamicColliders = [],
     buttons.remove();
   }
 
-  return { modeButtons: buttons, forceMode: (m) => mode !== m && setMode(m), setEyeOverride: (v) => { eyeOverride = v; }, update, reset, applyLayout, getState, look: applyLook, hide, show, isHidden: () => !!hidden, dispose };
+  return { setBlocked: (b) => { cutscene = b; if (b) reset(); }, modeButtons: buttons, forceMode: (m) => mode !== m && setMode(m), setEyeOverride: (v) => { eyeOverride = v; }, update, reset, applyLayout, getState, look: applyLook, hide, show, isHidden: () => !!hidden, dispose };
 }

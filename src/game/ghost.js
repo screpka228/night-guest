@@ -188,6 +188,10 @@ export function createGhost({ scene, colliders, rooms, difficulty, practice = fa
   let lastHeard = null;
   let goal = null;
   let listenTimer = 0;
+  let freezeTimer = 0;
+  let freezeThenMul = 1;
+  let speedMul = 1; // прогрессия ночей и ярость после ключей
+  let disabled = false;
   let patrolHold = idleSeconds; // пока > 0, гость стоит и не патрулирует
   let searchTight = false;
   let pendingTarget = null;
@@ -314,6 +318,12 @@ export function createGhost({ scene, colliders, rooms, difficulty, practice = fa
   }
 
   function update(dt, events, player) {
+    if (disabled) return;
+    if (freezeTimer > 0) {
+      freezeTimer -= dt;
+      if (freezeTimer <= 0) speedMul *= freezeThenMul; // после заморозки — агрессивнее
+      return; // замер: не слышит и не двигается
+    }
     if (patrolHold > 0) patrolHold -= dt;
     hear(events);
     if (listenTimer > 0) {
@@ -335,7 +345,7 @@ export function createGhost({ scene, colliders, rooms, difficulty, practice = fa
     }
 
     if (idx < path.length) {
-      move(dt, SPEED[state] * difficulty.ghostSpeed);
+      move(dt, SPEED[state] * difficulty.ghostSpeed * speedMul);
       goalTimer += dt;
       if (stuck > 0.5) {
         unstick();
@@ -368,5 +378,20 @@ export function createGhost({ scene, colliders, rooms, difficulty, practice = fa
     collider.z = pos.z;
   }
 
-  return { update, pos, collider, getState: () => state, isListening: () => listenTimer > 0 };
+  return {
+    freeze(sec, thenMul = 1) {
+      freezeTimer = sec;
+      freezeThenMul = thenMul;
+    },
+    setSpeedMul(m) {
+      speedMul = m;
+    },
+    disable() {
+      disabled = true;
+      group.visible = false;
+    },
+    get disabled() {
+      return disabled;
+    },
+    update, pos, collider, getState: () => state, isListening: () => listenTimer > 0 };
 }

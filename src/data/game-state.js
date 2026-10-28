@@ -1,4 +1,5 @@
 import { getDifficultyKey } from './difficulty.js';
+import { getNight } from './night.js';
 
 export let gameState = null;
 
@@ -8,7 +9,7 @@ export function createGameState() {
     pausedAt: null,
     pausedDuration: 0,
     difficulty: getDifficultyKey(),
-    night: 1
+    night: getNight()
   };
   return gameState;
 }
@@ -26,6 +27,12 @@ export function resumeGame() {
     gameState.pausedDuration += Date.now() - gameState.pausedAt;
     gameState.pausedAt = null;
   }
+}
+
+export function getElapsedSeconds() {
+  if (!gameState) return 0;
+  const now = gameState.pausedAt ?? Date.now();
+  return Math.max(0, (now - gameState.startedAt - gameState.pausedDuration) / 1000);
 }
 
 // MM:SS; на паузе время стоит на моменте паузы

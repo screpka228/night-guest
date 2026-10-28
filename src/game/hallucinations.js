@@ -17,9 +17,9 @@ const NORMAL_RATE = 0.6; // сложность «Нормально» — баз
 const rand = (a, b) => a + Math.random() * (b - a);
 
 // Стресс и галлюцинации: ложный гость, ложные звуки, искажение, один скример за игру
-export function createHallucinations({ scene, camera, colliders, rooms, container, canvas, difficulty }) {
+export function createHallucinations({ scene, camera, colliders, rooms, container, canvas, difficulty, night = 1 }) {
   const rate = difficulty.hallucinationRate; // 0 — выключено (практика)
-  const mult = rate / NORMAL_RATE;
+  const mult = (rate / NORMAL_RATE) * (1 + 0.25 * (night - 1)); // с каждой ночью чаще
   let stress = 0;
   let prevRinging = false;
   let screamerUsed = false;
@@ -218,6 +218,10 @@ export function createHallucinations({ scene, camera, colliders, rooms, containe
       stress = v;
     },
     debugSpawnFake: () => spawnFake(lastPlayer),
+    // для отладки: сейчас работают ли галлюцинации
+    get active() {
+      return mult > 0 && stress > 60;
+    },
     get fake() {
       return fake;
     }
