@@ -13,24 +13,17 @@ const cyl = (r, h, color) =>
 const box = (w, h, d, color) =>
   new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshBasicMaterial({ color }));
 
-// y — высота поверхности, на которой лежит предмет; icon — цвет и форма в слоте HUD
+// icon — цвет и форма в слоте HUD
 const DEFS = [
-  { id: 'bottle', name: 'Бутылка', throwable: true, x: 8.5, y: 0.8, z: 1.5, h: 0.25, icon: ['#3fa05a', 'cyl'], make: () => cyl(0.04, 0.25, 0x3fa05a) },
-  { id: 'can', name: 'Банка', throwable: true, x: -1.2, y: 0.4, z: 4.5, h: 0.12, icon: ['#aaaaaa', 'cyl'], make: () => cyl(0.05, 0.12, 0xaaaaaa) },
-  { id: 'keys', name: 'Ключи', throwable: true, x: 2.6, y: 0.7, z: -0.9, h: 0.02, icon: ['#e0c040', 'box'], make: () => box(0.09, 0.02, 0.05, 0xe0c040) },
-  { id: 'oil', name: 'Масло', throwable: false, x: 9.1, y: 0.9, z: -0.125, h: 0.22, icon: ['#8a5a20', 'cyl'], make: () => cyl(0.045, 0.22, 0x8a5a20) }
+  { id: 'bottle', name: 'Бутылка', throwable: true, icon: ['#3fa05a', 'cyl'], make: () => cyl(0.04, 0.25, 0x3fa05a) },
+  { id: 'can', name: 'Банка', throwable: true, icon: ['#aaaaaa', 'cyl'], make: () => cyl(0.05, 0.12, 0xaaaaaa) },
+  { id: 'carkeys', name: 'Ключи от машины', throwable: true, icon: ['#e0c040', 'box'], make: () => box(0.09, 0.02, 0.05, 0xe0c040) },
+  { id: 'oil', name: 'Масло', throwable: false, icon: ['#8a5a20', 'cyl'], make: () => cyl(0.045, 0.22, 0x8a5a20) }
 ];
 
-// Предметы: state.heldItem, слот HUD, бросок (шум 3 в точке падения), масло для дверей, ключи у входной двери
-export function createItems({ scene, camera, colliders, buttons, screen, doors, frontDoor }) {
+export function createItems({ scene, camera, colliders, buttons, screen, doors }) {
   const state = { heldItem: null }; // { type, mesh }
 
-  const objects = DEFS.map((d) => {
-    const mesh = d.make();
-    mesh.position.set(d.x, d.y + d.h / 2 + 0.005, d.z);
-    scene.add(mesh);
-    return { def: d, mesh };
-  });
   const projectiles = [];
 
   // --- HUD: слот 60×60 и подпись ---
@@ -74,17 +67,13 @@ export function createItems({ scene, camera, colliders, buttons, screen, doors, 
     b.hidden = true;
     return b;
   };
-  const pickBtn = mk('Подобрать', 'pick');
   const throwBtn = mk('Бросить', 'throw');
   const oilBtn = mk('Смазать', 'oil');
-  const openBtn = mk('Открыть', 'open');
-  buttons.prepend(slot, label, pickBtn, throwBtn, oilBtn, openBtn);
+  buttons.prepend(slot, label, throwBtn, oilBtn);
   const runBtn = buttons.querySelector('[data-mode="run"]');
   renderHeld();
 
-  let nearObj = null;
   let nearDoor = null;
-  let nearFront = false;
 
   const press = (btn, fn) =>
     btn.addEventListener('pointerdown', (e) => {
@@ -92,14 +81,13 @@ export function createItems({ scene, camera, colliders, buttons, screen, doors, 
       fn();
     });
 
-  // подбор: предмет убирается из сцены, попадает в руки
-  press(pickBtn, () => {
-    if (!nearObj || state.heldItem) return;
-    nearObj.mesh.visible = false;
-    state.heldItem = { type: nearObj.def.id, mesh: nearObj.mesh };
-    nearObj.taken = true;
+  // предмет из ящика попадает в руки (только если они свободны)
+  function give(type) {
+    if (state.heldItem || !DEFS.find((d) => d.id === type)) return false;
+    state.heldItem = { type };
     renderHeld();
-  });
+    return true;
+  }
 
   // бросок: новый снаряд в 0.5 м перед камерой, скорость вперёд*8 + 3 вверх
   press(throwBtn, () => {
@@ -125,12 +113,6 @@ export function createItems({ scene, camera, colliders, buttons, screen, doors, 
     state.heldItem = null;
     renderHeld();
     showToast('Дверь смазана');
-  });
-
-  // заглушка будущей концовки A
-  press(openBtn, () => {
-    if (!state.heldItem || state.heldItem.type !== 'keys' || !nearFront) return;
-    setTimeout(() => alert('Ключи подошли, но дверь пока заблокирована'), 0);
   });
 
   function land(p, x, z) {
@@ -163,27 +145,12 @@ export function createItems({ scene, camera, colliders, buttons, screen, doors, 
     }
 
     const held = state.heldItem;
-    nearObj = null;
-    if (!held) {
-      let bd = PICK_RADIUS;
-      for (const o of objects) {
-        if (o.taken) continue;
-        const d = Math.hypot(player.x - o.def.x, player.z - o.def.z);
-        if (d <= bd) {
-          bd = d;
-          nearObj = o;
-        }
-      }
-    }
     nearDoor = held && held.type === 'oil' ? doors.nearest(player, PICK_RADIUS) : null;
-    nearFront = !!held && held.type === 'keys' && Math.hypot(player.x - frontDoor.x, player.z - frontDoor.z) <= PICK_RADIUS;
     const def = held && DEFS.find((d) => d.id === held.type);
 
-    pickBtn.hidden = !nearObj;
     // «Смазать» вместо «Бросить», когда в руках масло
     throwBtn.hidden = !(def && def.throwable);
     oilBtn.hidden = !nearDoor;
-    openBtn.hidden = !nearFront;
     if (runBtn) runBtn.style.display = throwBtn.hidden ? '' : 'none'; // «Бросить» заменяет «Бег»
 
     if (toastTimer > 0) {
@@ -194,9 +161,9 @@ export function createItems({ scene, camera, colliders, buttons, screen, doors, 
 
   function dispose() {
     toast.remove();
-    for (const el of [slot, label, pickBtn, throwBtn, oilBtn, openBtn]) el.remove();
+    for (const el of [slot, label, throwBtn, oilBtn]) el.remove();
     if (runBtn) runBtn.style.display = '';
   }
 
-  return { update, dispose, state };
+  return { update, dispose, state, give, showToast };
 }

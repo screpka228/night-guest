@@ -178,6 +178,8 @@ export function initScene(canvas) {
   furn({ w: 0.5, h: 0.5, d: 0.4, x: -8.6, z: -2.2, color: 0x3a2a1c });
   cylinder(0.08, 0.3, -8.6, 0.5, -2.2, basic(0xc9a66b));
 
+  furn({ w: 1, h: 0.8, d: 0.5, x: -6.3, z: -2.1, color: 0x3a2a1c }); // комод
+
   // Шкафы и кровати-укрытия: rotationY — куда открыто, наружная нормаль = (sin, cos)
   const closets = [
     { id: 'bedroom', x: -8, z: 2.15, rotationY: Math.PI, w: 2, d: 0.6 },
@@ -200,6 +202,8 @@ export function initScene(canvas) {
   furn({ w: 0.8, h: 0.7, d: 0.35, x: 2.6, z: -0.9, color: 0x3a2a1c });
   plane(0.8, 1.2, 2.6, 1.4, -1.16, 0, basic(0x888888));
 
+  furn({ w: 0.8, h: 0.8, d: 0.35, x: -1.6, z: -0.95, color: 0x3a2a1c }); // тумба в коридоре
+
   // Кухня (x 5..11, z -0.5..3.5)
   furn({ w: 1.5, h: 0.8, d: 0.8, x: 8.2, z: 1.5, color: 0x5b4632 });
   for (const [cx, cz] of [[7.8, 0.8], [8.6, 0.8], [7.8, 2.2], [8.6, 2.2]]) {
@@ -211,11 +215,13 @@ export function initScene(canvas) {
   furn({ w: 0.6, h: 0.9, d: 0.6, x: 9.7, z: -0.125, color: 0x4a4038 });
 
   // Ванная (x -1.5..1.5, z -4.25..-1.25)
+  furn({ w: 0.4, h: 0.8, d: 0.6, x: -1.1, z: -3.7, color: 0xcfd4d6 }); // шкафчик
   furn({ w: 0.8, h: 0.6, d: 1.7, x: 1.05, z: -3.2, color: 0xcfd4d6 }); // у восточной стены, вентиляция в северной свободна
   furn({ w: 0.4, h: 0.85, d: 0.5, x: -1.25, z: -2.4, color: 0xcfd4d6 });
   plane(0.6, 0.8, -1.42, 1.5, -2.4, Math.PI / 2, basic(0x888888));
 
   // Гостиная (x -5..2, z 1.25..7.25)
+  furn({ w: 0.8, h: 0.9, d: 0.4, x: 0.6, z: 1.55, color: 0x3a2a1c }); // шкафчик у северной стены
   furn({ w: 0.9, h: 0.8, d: 2.2, x: 1.4, z: 4.5, color: 0x3b3f4a });
   furn({ w: 0.2, h: 0.5, d: 2.2, x: 1.75, z: 4.5, y: 0.8, color: 0x3b3f4a, collide: false, shadow: false });
   furn({ w: 0.4, h: 0.5, d: 1.2, x: -4.75, z: 4.5, color: 0x2e2118 });
@@ -229,6 +235,22 @@ export function initScene(canvas) {
   furn({ w: 0.4, h: 1.8, d: 1, x: 4.75, z: 3.7, color: 0x3a2a1c });
   furn({ w: 0.5, h: 0.5, d: 0.5, x: 2.5, z: 3.9, color: 0x5b4632 });
   furn({ w: 0.5, h: 0.4, d: 0.5, x: 2.5, z: 3.2, color: 0x4a3828 });
+
+  // 12 интерактивных точек (y — высота, на которой стоит маленький ящик)
+  const spots = [
+    { id: 0, room: 'bedroom', x: -8.45, z: -2.2, y: 0.5 },
+    { id: 1, room: 'bedroom', x: -6.3, z: -2.1, y: 0.8 },
+    { id: 2, room: 'corridor', x: 2.6, z: -0.9, y: 0.7 },
+    { id: 3, room: 'corridor', x: -1.6, z: -0.95, y: 0.8 },
+    { id: 4, room: 'kitchen', x: 9.7, z: -0.125, y: 0.9 },
+    { id: 5, room: 'kitchen', x: 9.1, z: -0.125, y: 0.9 },
+    { id: 6, room: 'bathroom', x: -1.1, z: -3.7, y: 0.8 },
+    { id: 7, room: 'living', x: -4.75, z: 4.5, y: 0.5 },
+    { id: 8, room: 'living', x: -1.2, z: 4.5, y: 0.4 },
+    { id: 9, room: 'living', x: 0.6, z: 1.55, y: 0.9 },
+    { id: 10, room: 'storage', x: 4.5, z: 3.7, y: 1.0 },
+    { id: 11, room: 'storage', x: 2.5, z: 3.9, y: 0.5 }
+  ];
 
   // Входная дверь (заглушка концовки A): восточная стена кухни
   const frontDoor = { x: 11, z: 2.2 };
@@ -245,7 +267,7 @@ export function initScene(canvas) {
     for (const c of doors) doorways.push(horizontal ? { x: c, z: fixed, horizontal } : { x: fixed, z: c, horizontal });
   }
 
-  return { scene, camera, renderer, rooms, colliders, closets, doorways, vents, frontDoor };
+  return { scene, camera, renderer, rooms, colliders, closets, doorways, vents, frontDoor, spots };
 }
 
 export function resizeScene({ camera, renderer }) {

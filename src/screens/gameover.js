@@ -15,3 +15,17 @@ export function mountGameOver(parent, { attemptsLeft }) {
   parent.appendChild(el);
   return { destroy: () => el.remove() };
 }
+
+// Побег: ключи найдены, входная дверь открыта
+export function mountEscape(parent) {
+  const el = document.createElement('div');
+  el.className = 'overlay overlay-dead overlay-win';
+  el.innerHTML = `
+    <div class="dead-box win">
+      <h2>Вы сбежали!</h2>
+      <button data-act>В меню</button>
+    </div>`;
+  el.querySelector('[data-act]').addEventListener('click', () => navigate('menu'));
+  parent.appendChild(el);
+  return { destroy: () => el.remove() };
+}

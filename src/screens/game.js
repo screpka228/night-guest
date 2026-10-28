@@ -14,7 +14,9 @@ import { updateNoise, clearNoise, noiseEvents, noiseLevel, quietLeft } from '../
 import { createGhost } from '../game/ghost.js';
 import { playScream } from '../game/sfx.js';
 import { mountPause } from './pause.js';
-import { mountGameOver } from './gameover.js';
+import { mountGameOver, mountEscape } from './gameover.js';
+import { spawnContents } from '../game/spawn.js';
+import { createSpots } from '../game/spots.js';
 
 const CATCH_DISTANCE = 1.2;
 const cap = (s) => s[0].toUpperCase() + s.slice(1);
@@ -28,6 +30,7 @@ export function mountGame(root) {
     <div class="screen game">
       <canvas id="game-canvas"></canvas>
       <div class="hud">${getDifficulty().name} · Попытки: ${attempts === Infinity ? '∞' : attempts}</div>
+      <div class="goal-hud">Обыщи квартиру</div>
       <div class="noise-meter" data-level="0"><i></i><i></i><i></i></div>
       <div class="quiet-hud" hidden>Тихо...</div>
       <button class="hide-btn" data-hide hidden>Спрятаться</button>
@@ -53,6 +56,9 @@ export function mountGame(root) {
   let items = null;
   let phone = null;
   let vents = null;
+  let spots = null;
+  let keysSpot = null;
+  const goalHud = root.querySelector('.goal-hud');
   let nearCloset = null;
   const hideBtn = root.querySelector('[data-hide]');
   const quietHud = root.querySelector('.quiet-hud');
@@ -105,10 +111,30 @@ export function mountGame(root) {
       doors,
       frontDoor: three.frontDoor
     });
+    const spawned = spawnContents(three.spots);
+    keysSpot = spawned.keysSpot;
+    spots = createSpots({
+      scene: three.scene,
+      spots: three.spots,
+      contents: spawned.contents,
+      buttons: controls.modeButtons,
+      items,
+      frontDoor: three.frontDoor,
+      notify: items.showToast,
+      onEscape: () => {
+        dead = true; // игра окончена: пауза и поимка отключены
+        loop?.stop();
+        controls?.reset();
+        hiding?.dispose();
+        phone?.dispose();
+        hideBtn.hidden = true;
+        gameOver = mountEscape(screen);
+      }
+    });
     vents = createVents({ vents: three.vents, camera: three.camera, controls, container: screen });
     phone = createPhone({ container: screen, difficulty: getDifficulty() });
     hiding = createHiding({ container: screen, camera: three.camera, controls, onCaught: caught });
-    if (debug) window.__ng = { camera: three.camera, ghost, colliders: three.colliders, noiseEvents, hiding, doors, items, phone, vents, difficulty: getDifficulty() };
+    if (debug) window.__ng = { camera: three.camera, ghost, colliders: three.colliders, noiseEvents, hiding, doors, items, phone, vents, spots, spawned, difficulty: getDifficulty() };
     loop = createLoop({
       renderer: three.renderer,
       scene: three.scene,
@@ -124,6 +150,8 @@ export function mountGame(root) {
         if (!hiding.active) vents.update(dt);
         doors.update(dt, { x: p.x, z: p.z });
         items.update(dt, { x: p.x, z: p.z });
+        spots.update({ x: p.x, z: p.z });
+        goalHud.textContent = spots.state.keysFound ? 'Беги к выходу!' : 'Обыщи квартиру';
         phone.update(dt, { x: p.x, z: p.z });
         ghost.update(dt, noiseEvents, hiding.active ? null : { x: p.x, z: p.z });
         // поимка не зависит от состояния гостя: подошёл вплотную — поймал
@@ -149,6 +177,7 @@ export function mountGame(root) {
           const last = noiseEvents[noiseEvents.length - 1];
           devInfo.textContent =
             `Игрок: ${cap(s.mode)}\n${hiding.active ? 'В шкафу, ' : ''}Гость: ${cap(ghost.getState())}${ghost.isListening() ? ' (слушает)' : ''}  dist=${dist.toFixed(1)}` +
+            `\nКлючи: точка #${keysSpot.id} (${keysSpot.room})` +
             `\nВ руках: ${items.state.heldItem ? items.state.heldItem.type : 'пусто'}` +
             `\nМетки шума: ${noiseEvents.length}` +
             `\nПоследняя метка: ${last ? `${last.x.toFixed(1)}, ${last.z.toFixed(1)}, ${last.intensity}` : '—'}`;
@@ -200,6 +229,7 @@ export function mountGame(root) {
     gameOver?.destroy();
     hiding?.dispose();
     items?.dispose();
+    spots?.dispose();
     vents?.dispose();
     phone?.dispose();
     loop?.dispose();

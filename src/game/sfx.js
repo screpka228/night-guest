@@ -162,3 +162,30 @@ export function playImpact() {
     osc.stop(now + dur);
   } catch {}
 }
+
+// Тихий стук/скрип открываемого ящика
+export function playKnock() {
+  try {
+    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state === 'suspended') ctx.resume();
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(220, now);
+    osc.frequency.exponentialRampToValueAtTime(90, now + 0.15);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.15, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.2);
+  } catch {}
+}
+
+// Ловушка: громкий грохот
+export function playTrap() {
+  playImpact();
+  playImpact();
+  playScream();
+}
