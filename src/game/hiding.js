@@ -1,4 +1,4 @@
-import { emitNoise } from './noise.js';
+import { emitNoise, startQuiet } from './noise.js';
 import { startBreathSound } from './sfx.js';
 
 const BASE_ZONE = 0.4;
@@ -15,6 +15,7 @@ const SUFFOCATE_STEP = 5;
 const SUFFOCATE_SHRINK = 0.03;
 const CAUGHT_DIST = 2.0;
 const EMIT_INTERVAL = 0.5;
+const QUIET_AFTER_EXIT = 2; // секунд тишины после выхода из укрытия
 
 // Укрытие в шкафу: щель обзора, полоска дыхания, шум и поимка
 export function createHiding({ container, camera, controls, onCaught }) {
@@ -100,7 +101,8 @@ export function createHiding({ container, camera, controls, onCaught }) {
     controls.hide({
       x: closet.x + nx * 0.15,
       z: closet.z + nz * 0.15,
-      yaw: closet.rotationY + Math.PI // смотрим наружу
+      yaw: closet.rotationY + Math.PI, // смотрим наружу
+      eye: closet.eye
     });
     ui = buildUi();
   }
@@ -109,6 +111,7 @@ export function createHiding({ container, camera, controls, onCaught }) {
     if (!s.active) return;
     s.active = false;
     if (forced) emitNoise(s.closet.x, s.closet.z, 3); // вынужденный выход громкий
+    startQuiet(QUIET_AFTER_EXIT);
     stopBreath?.();
     stopBreath = null;
     ui?.el.remove();
@@ -166,7 +169,7 @@ export function createHiding({ container, camera, controls, onCaught }) {
             onCaught(); // гость стоит рядом, а игрок снова выдал себя
             return;
           }
-          emitNoise(s.closet.x, s.closet.z, 2, { closet: true });
+          emitNoise(s.closet.x, s.closet.z, 2, { closet: true, force: true });
         }
       }
     }

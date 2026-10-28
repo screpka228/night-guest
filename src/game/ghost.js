@@ -3,10 +3,10 @@ import { isBlocked } from '../three/collision.js';
 
 // Сетка поиска пути: центры клеток кратны 0.2 м, поэтому лежат ровно на линиях дверей (x = ±3, z = ±1 и т.д.)
 const CELL = 0.2;
-const X0 = -7.5;
-const Z0 = -3.5;
-const NX = 75;
-const NZ = 45;
+const X0 = -11.5;
+const Z0 = -4.5;
+const NX = 115;
+const NZ = 60;
 const GHOST_R = 0.28;
 const SEARCH_TIME = 10;
 // Порог слышимости: шаг (1) слышен везде, кроме практики; присед (0.3) не слышен
@@ -59,7 +59,7 @@ class MinHeap {
   }
 }
 
-export function createGhost({ scene, colliders, rooms, difficulty, practice = false }) {
+export function createGhost({ scene, colliders, rooms, difficulty, practice = false, start = { x: -2, z: 3.2 }, idleSeconds = 0 }) {
   // --- сетка проходимости: внутри комнат и не в стенах/мебели ---
   const free = new Uint8Array(NX * NZ);
   const cellX = (i) => X0 + (i + 0.5) * CELL;
@@ -174,7 +174,7 @@ export function createGhost({ scene, colliders, rooms, difficulty, practice = fa
   scene.add(group);
 
   // --- состояние ---
-  const pos = { x: -1.0, z: 2.0 }; // гостиная
+  const pos = { x: start.x, z: start.z }; // гостиная
   group.position.set(pos.x, 0, pos.z);
   // динамический коллайдер для игрока (в общий список не добавляем: гость бы блокировал сам себя)
   const collider = { x: pos.x, z: pos.z, w: 0.6, d: 0.6 };
@@ -188,6 +188,7 @@ export function createGhost({ scene, colliders, rooms, difficulty, practice = fa
   let lastHeard = null;
   let goal = null;
   let listenTimer = 0;
+  let patrolHold = idleSeconds; // пока > 0, гость стоит и не патрулирует
   let searchTight = false;
   let pendingTarget = null;
   let goalTimer = 0;
@@ -234,8 +235,8 @@ export function createGhost({ scene, colliders, rooms, difficulty, practice = fa
       state === 'chase'
         ? { x: best.x, z: best.z }
         : {
-            x: best.x + (Math.random() * 2 - 1) * SOUND_SPREAD,
-            z: best.z + (Math.random() * 2 - 1) * SOUND_SPREAD
+            x: best.x + (Math.random() * 2 - 1) * (best.spread ?? SOUND_SPREAD),
+            z: best.z + (Math.random() * 2 - 1) * (best.spread ?? SOUND_SPREAD)
           };
     if (idle) {
       // остановился и прислушивается
@@ -313,6 +314,7 @@ export function createGhost({ scene, colliders, rooms, difficulty, practice = fa
   }
 
   function update(dt, events, player) {
+    if (patrolHold > 0) patrolHold -= dt;
     hear(events);
     if (listenTimer > 0) {
       listenTimer -= dt;
@@ -353,7 +355,7 @@ export function createGhost({ scene, colliders, rooms, difficulty, practice = fa
           wait = 0.3 + Math.random() * 0.5;
           wander();
         }
-      } else {
+      } else if (patrolHold <= 0) {
         wait -= dt;
         if (wait <= 0) {
           wait = 0.5 + Math.random();

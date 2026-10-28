@@ -171,7 +171,7 @@ export function initControls(camera, canvas, { colliders, dynamicColliders = [],
 
   function update(dt) {
     if (hidden) {
-      camera.position.y = HIDE_EYE;
+      camera.position.y = hidden.eye;
       return;
     }
     const mag = Math.min(1, Math.hypot(stick.x, stick.y));
@@ -205,11 +205,11 @@ export function initControls(camera, canvas, { colliders, dynamicColliders = [],
     lookId = null;
   }
 
-  function hide({ x, z, yaw }) {
+  function hide({ x, z, yaw, eye: hideEye = HIDE_EYE }) {
     saved = { x: camera.position.x, z: camera.position.z, yaw: camera.rotation.y, pitch: camera.rotation.x };
     reset();
-    hidden = { base: yaw };
-    camera.position.set(x, HIDE_EYE, z);
+    hidden = { base: yaw, eye: hideEye };
+    camera.position.set(x, hideEye, z);
     camera.rotation.set(0, yaw, 0);
     base.style.display = 'none';
     buttons.style.display = 'none';

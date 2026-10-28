@@ -53,7 +53,7 @@ export function createPhone({ container, difficulty }) {
     if (ringing) {
       ringTimer -= dt;
       if (ringTimer <= 0) {
-        emitNoise(player.x, player.z, 3);
+        emitNoise(player.x, player.z, 3, { force: true });
         stop();
       }
     } else {

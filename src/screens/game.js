@@ -9,7 +9,7 @@ import { createHiding } from '../game/hiding.js';
 import { createDoors } from '../game/doors.js';
 import { createItems } from '../game/items.js';
 import { createPhone } from '../game/phone.js';
-import { updateNoise, clearNoise, noiseEvents, noiseLevel } from '../game/noise.js';
+import { updateNoise, clearNoise, noiseEvents, noiseLevel, quietLeft } from '../game/noise.js';
 import { createGhost } from '../game/ghost.js';
 import { playScream } from '../game/sfx.js';
 import { mountPause } from './pause.js';
@@ -28,6 +28,7 @@ export function mountGame(root) {
       <canvas id="game-canvas"></canvas>
       <div class="hud">${getDifficulty().name} · Попытки: ${attempts === Infinity ? '∞' : attempts}</div>
       <div class="noise-meter" data-level="0"><i></i><i></i><i></i></div>
+      <div class="quiet-hud" hidden>Тихо...</div>
       <button class="hide-btn" data-hide hidden>Спрятаться</button>
       <button class="pause-btn" data-pause aria-label="Пауза">⏸</button>
     </div>`;
@@ -52,6 +53,7 @@ export function mountGame(root) {
   let phone = null;
   let nearCloset = null;
   const hideBtn = root.querySelector('[data-hide]');
+  const quietHud = root.querySelector('.quiet-hud');
   hideBtn.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     if (nearCloset && !dead) hiding.enter(nearCloset);
@@ -75,19 +77,23 @@ export function mountGame(root) {
   let loop = null;
   try {
     three = initScene(canvas);
+    const practice = getDifficultyKey() === 'practice';
     ghost = createGhost({
       scene: three.scene,
       colliders: three.colliders,
       rooms: three.rooms,
       difficulty: getDifficulty(),
-      practice: getDifficultyKey() === 'practice'
+      practice,
+      // практика: дальний угол гостиной и минута неподвижности
+      start: practice ? { x: 1.2, z: 6.8 } : { x: -2, z: 3.2 },
+      idleSeconds: practice ? 60 : 0
     });
     controls = initControls(three.camera, canvas, {
       colliders: three.colliders,
       dynamicColliders: [ghost.collider], // сквозь гостя не пройти
       container: screen
     });
-    doors = createDoors({ scene: three.scene, doorways: three.doorways });
+    doors = createDoors({ scene: three.scene, doorways: three.doorways, enabled: !practice });
     items = createItems({
       scene: three.scene,
       camera: three.camera,
@@ -98,7 +104,7 @@ export function mountGame(root) {
     });
     phone = createPhone({ container: screen, difficulty: getDifficulty() });
     hiding = createHiding({ container: screen, camera: three.camera, controls, onCaught: caught });
-    if (debug) window.__ng = { camera: three.camera, ghost, colliders: three.colliders, noiseEvents, hiding, doors, items, phone };
+    if (debug) window.__ng = { camera: three.camera, ghost, colliders: three.colliders, noiseEvents, hiding, doors, items, phone, difficulty: getDifficulty() };
     loop = createLoop({
       renderer: three.renderer,
       scene: three.scene,
@@ -130,6 +136,8 @@ export function mountGame(root) {
           }
         }
         hideBtn.hidden = !nearCloset;
+        if (nearCloset) hideBtn.textContent = nearCloset.type === 'bed' ? 'Под кровать' : 'Спрятаться';
+        quietHud.hidden = quietLeft() <= 0;
         meter.dataset.level = noiseLevel(s.noise);
         if (devInfo) {
           const dist = Math.hypot(ghost.pos.x - p.x, ghost.pos.z - p.z);

@@ -358,3 +358,16 @@ input[type='range']::-moz-range-thumb {
   border-color: #4c4;
   touch-action: none;
 }
+
+.quiet-hud {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 18px;
+  color: #9ab;
+  pointer-events: none;
+  animation: blink 0.8s steps(2, start) infinite;
+}
+.quiet-hud[hidden] { display: none; }
+@keyframes blink { 50% { opacity: 0.2; } }

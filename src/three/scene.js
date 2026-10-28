@@ -7,24 +7,30 @@ const DOOR_H = 2.1;
 
 // Комнаты: прямоугольники в метрах (x → восток, z → юг)
 const ROOM_DEFS = [
-  { name: 'bedroom',  x1: -7,   z1: -2,   x2: -3,  z2: 2,    floor: 0x4a3626 },
-  { name: 'corridor', x1: -3,   z1: -1,   x2: 3,   z2: 1,    floor: 0x4d5254 },
-  { name: 'kitchen',  x1: 3,    z1: -1.5, x2: 7,   z2: 1.5,  floor: 0x5a4330 },
-  { name: 'bathroom', x1: -1.5, z1: -3,   x2: 1.5, z2: -1,   floor: 0x6c7377 },
-  { name: 'living',   x1: -2.5, z1: 1,    x2: 2.5, z2: 5,    floor: 0x3f2d20 }
+  { name: 'bedroom',  x1: -11,   z1: -2.5,  x2: -5, z2: 2.5,  floor: 0x4a3626 },
+  { name: 'corridor', x1: -5,    z1: -1.25, x2: 5,  z2: 1.25, floor: 0x4d5254 },
+  { name: 'kitchen',  x1: 5,     z1: -0.5,  x2: 11, z2: 3.5,  floor: 0x5a4330 },
+  { name: 'bathroom', x1: -1.5,  z1: -4.25, x2: 1.5, z2: -1.25, floor: 0x6c7377 },
+  { name: 'living',   x1: -5,    z1: 1.25,  x2: 2,  z2: 7.25, floor: 0x3f2d20 },
+  { name: 'storage',  x1: 2,     z1: 1.25,  x2: 5,  z2: 4.25, floor: 0x3a3a38 }
 ];
 
-// Стены: horizontal = вдоль x (z фиксирован), иначе вдоль z (x фиксирован)
+// Стены: horizontal = вдоль x (z фиксирован), иначе вдоль z (x фиксирован); последний элемент — центры проёмов.
+// Центры подобраны на сетку 0.2 м, чтобы проёмы были проходимы для гостя.
 const WALLS = [
-  [true, -2, -7, -3], [true, 2, -7, -3],
-  [true, -1.5, 3, 7], [true, 1.5, 3, 7],
-  [true, -3, -1.5, 1.5],
-  [true, -1, -3, 3, [0]], [true, 1, -3, 3, [0]],
-  [true, 5, -2.5, 2.5],
-  [false, -7, -2, 2], [false, -3, -2, 2, [0]],
-  [false, 3, -1.5, 1.5, [0]], [false, 7, -1.5, 1.5],
-  [false, -1.5, -3, -1], [false, 1.5, -3, -1],
-  [false, -2.5, 1, 5], [false, 2.5, 1, 5]
+  [true, -2.5, -11, -5], [true, 2.5, -11, -5],
+  [true, -1.25, -5, 5, [0]],
+  [true, 1.25, -5, 5, [-1.4, 3.4]],
+  [true, -4.25, -1.5, 1.5],
+  [true, 7.25, -5, 2],
+  [true, 4.25, 2, 5],
+  [true, -0.5, 5, 11], [true, 3.5, 5, 11],
+  [false, -11, -2.5, 2.5],
+  [false, -5, -2.5, 7.25, [0, 1.8]],
+  [false, 2, 1.25, 7.25, [2.8]],
+  [false, 5, -1.25, 4.25, [0.2, 2.4]],
+  [false, 11, -0.5, 3.5],
+  [false, -1.5, -4.25, -1.25], [false, 1.5, -4.25, -1.25]
 ];
 
 export function initScene(canvas) {
@@ -37,7 +43,7 @@ export function initScene(canvas) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 50);
   camera.rotation.order = 'YXZ';
-  camera.position.set(-4.2, 1.6, 0);
+  camera.position.set(-7.4, 1.6, 0);
   camera.rotation.y = Math.PI / 2; // смотрим на запад: кровать, шкаф, окно
   scene.add(camera);
 
@@ -131,59 +137,69 @@ export function initScene(canvas) {
     scene.add(m);
   }
 
-  // Спальня
-  furn({ w: 2, h: 0.5, d: 2.2, x: -5.8, z: -0.8, color: 0x3d4a5c });
-  furn({ w: 0.8, h: 0.15, d: 0.4, x: -5.8, z: -1.65, y: 0.5, color: 0xcfcfc8, collide: false, shadow: false });
-  furn({ w: 2, h: 2, d: 0.6, x: -5, z: 1.6, color: 0x2e2118 });
-  furn({ w: 0.5, h: 0.5, d: 0.4, x: -4.45, z: -1.7, color: 0x3a2a1c });
-  cylinder(0.08, 0.3, -4.45, 0.5, -1.7, basic(0xc9a66b));
+  // Спальня (x -11..-5, z -2.5..2.5)
+  furn({ w: 2, h: 0.5, d: 2.2, x: -9.9, z: -1.3, color: 0x3d4a5c });
+  furn({ w: 0.8, h: 0.15, d: 0.4, x: -9.9, z: -2.15, y: 0.5, color: 0xcfcfc8, collide: false, shadow: false });
+  furn({ w: 2, h: 2, d: 0.6, x: -8, z: 2.15, color: 0x2e2118 });
+  furn({ w: 0.5, h: 0.5, d: 0.4, x: -8.6, z: -2.2, color: 0x3a2a1c });
+  cylinder(0.08, 0.3, -8.6, 0.5, -2.2, basic(0xc9a66b));
 
-  // Шкафы (прячемся внутри): rotationY — куда смотрит дверца, наружная нормаль = (sin, cos)
+  // Шкафы и кровати-укрытия: rotationY — куда открыто, наружная нормаль = (sin, cos)
   const closets = [
-    { id: 'bedroom', x: -5, z: 1.6, rotationY: Math.PI, w: 2, d: 0.6 },
-    { id: 'corridor', x: 1.7, z: 0.62, rotationY: Math.PI, w: 1, d: 0.6 } // у южной стены, не у дверей
+    { id: 'bedroom', x: -8, z: 2.15, rotationY: Math.PI, w: 2, d: 0.6 },
+    { id: 'corridor', x: -3.2, z: -0.875, rotationY: 0, w: 1.2, d: 0.6 },
+    { id: 'bed-bedroom', type: 'bed', x: -9.9, z: -1.3, rotationY: Math.PI / 2, w: 2, d: 2.2, eye: 0.3 },
+    { id: 'bed-living', type: 'bed', x: -4, z: 6.1, rotationY: Math.PI / 2, w: 1.6, d: 2, eye: 0.3 }
   ];
-  furn({ w: 1, h: 2, d: 0.6, x: 1.7, z: 0.62, color: 0x2e2118 });
+  furn({ w: 1.2, h: 2, d: 0.6, x: -3.2, z: -0.875, color: 0x2e2118 });
   for (const c of closets) {
+    if (c.type) continue;
     const door = new THREE.Mesh(new THREE.PlaneGeometry(c.w - 0.12, 1.9), mat(0x4a3626));
     door.position.set(c.x + Math.sin(c.rotationY) * (c.d / 2 + 0.01), 1.0, c.z + Math.cos(c.rotationY) * (c.d / 2 + 0.01));
     door.rotation.y = c.rotationY;
     scene.add(door);
   }
 
-  // Коридор
-  cylinder(0.03, 1.8, 2.5, 0, -0.8, mat(0x222222));
-  furn({ w: 0.3, h: 0.04, d: 0.3, x: 2.5, z: -0.8, y: 1.8, color: 0x222222, shadow: false });
-  furn({ w: 0.8, h: 0.7, d: 0.35, x: -2, z: -0.8, color: 0x3a2a1c });
-  plane(0.8, 1.2, -2, 1.4, -0.91, 0, basic(0x888888));
+  // Коридор (x -5..5, z -1.25..1.25)
+  cylinder(0.03, 1.8, 4.4, 0, -0.95, mat(0x222222));
+  furn({ w: 0.3, h: 0.04, d: 0.3, x: 4.4, z: -0.95, y: 1.8, color: 0x222222, shadow: false });
+  furn({ w: 0.8, h: 0.7, d: 0.35, x: 2.6, z: -0.9, color: 0x3a2a1c });
+  plane(0.8, 1.2, 2.6, 1.4, -1.16, 0, basic(0x888888));
 
-  // Кухня
-  furn({ w: 1.5, h: 0.8, d: 0.8, x: 5.2, z: 0.2, color: 0x5b4632 });
-  for (const [cx, cz] of [[4.8, -0.5], [5.6, -0.5], [4.8, 0.9], [5.6, 0.9]]) {
+  // Кухня (x 5..11, z -0.5..3.5)
+  furn({ w: 1.5, h: 0.8, d: 0.8, x: 8.2, z: 1.5, color: 0x5b4632 });
+  for (const [cx, cz] of [[7.8, 0.8], [8.6, 0.8], [7.8, 2.2], [8.6, 2.2]]) {
     furn({ w: 0.4, h: 0.45, d: 0.4, x: cx, z: cz, color: 0x4a3828, shadow: false });
   }
-  furn({ w: 0.7, h: 1.8, d: 0.7, x: 6.55, z: -1.05, color: 0xb8b8b8 });
-  furn({ w: 0.6, h: 0.9, d: 0.6, x: 4, z: -1.15, color: 0x2a2a2a });
-  furn({ w: 0.6, h: 0.9, d: 0.6, x: 4.65, z: -1.15, color: 0x4a4038 });
-  furn({ w: 0.6, h: 0.9, d: 0.6, x: 5.3, z: -1.15, color: 0x4a4038 });
+  furn({ w: 0.7, h: 1.8, d: 0.7, x: 10.55, z: -0.05, color: 0xb8b8b8 });
+  furn({ w: 0.6, h: 0.9, d: 0.6, x: 8.5, z: -0.125, color: 0x2a2a2a });
+  furn({ w: 0.6, h: 0.9, d: 0.6, x: 9.1, z: -0.125, color: 0x4a4038 });
+  furn({ w: 0.6, h: 0.9, d: 0.6, x: 9.7, z: -0.125, color: 0x4a4038 });
 
-  // Ванная
-  furn({ w: 1.7, h: 0.6, d: 0.8, x: 0.6, z: -2.5, color: 0xcfd4d6 });
-  furn({ w: 0.4, h: 0.85, d: 0.5, x: -1.25, z: -1.9, color: 0xcfd4d6 });
-  plane(0.6, 0.8, -1.42, 1.5, -1.9, Math.PI / 2, basic(0x888888));
+  // Ванная (x -1.5..1.5, z -4.25..-1.25)
+  furn({ w: 1.7, h: 0.6, d: 0.8, x: 0.6, z: -3.75, color: 0xcfd4d6 });
+  furn({ w: 0.4, h: 0.85, d: 0.5, x: -1.25, z: -2.4, color: 0xcfd4d6 });
+  plane(0.6, 0.8, -1.42, 1.5, -2.4, Math.PI / 2, basic(0x888888));
 
-  // Гостиная
-  furn({ w: 0.9, h: 0.8, d: 2.2, x: 2, z: 3, color: 0x3b3f4a });
-  furn({ w: 0.2, h: 0.5, d: 2.2, x: 2.35, z: 3, y: 0.8, color: 0x3b3f4a, collide: false, shadow: false });
-  furn({ w: 0.4, h: 0.5, d: 1.2, x: -2.2, z: 3, color: 0x2e2118 });
-  furn({ w: 0.06, h: 0.6, d: 1, x: -2.3, z: 3, y: 0.5, color: 0x080808, collide: false, shadow: false });
-  furn({ w: 0.5, h: 0.4, d: 1, x: 0.2, z: 3, color: 0x3a2a1c });
-  furn({ w: 0.8, h: 0.8, d: 0.8, x: -1.2, z: 4.4, color: 0x4a3a3a });
+  // Гостиная (x -5..2, z 1.25..7.25)
+  furn({ w: 0.9, h: 0.8, d: 2.2, x: 1.4, z: 4.5, color: 0x3b3f4a });
+  furn({ w: 0.2, h: 0.5, d: 2.2, x: 1.75, z: 4.5, y: 0.8, color: 0x3b3f4a, collide: false, shadow: false });
+  furn({ w: 0.4, h: 0.5, d: 1.2, x: -4.75, z: 4.5, color: 0x2e2118 });
+  furn({ w: 0.06, h: 0.6, d: 1, x: -4.85, z: 4.5, y: 0.5, color: 0x080808, collide: false, shadow: false });
+  furn({ w: 0.5, h: 0.4, d: 1, x: -1.2, z: 4.5, color: 0x3a2a1c });
+  furn({ w: 0.8, h: 0.8, d: 0.8, x: -2.2, z: 6.6, color: 0x4a3a3a });
+  furn({ w: 1.6, h: 0.5, d: 2, x: -4, z: 6.1, color: 0x3d4a5c });
+  furn({ w: 0.6, h: 0.15, d: 0.5, x: -4.4, z: 6.6, y: 0.5, color: 0xcfcfc8, collide: false, shadow: false });
+
+  // Кладовка (x 2..5, z 1.25..4.25)
+  furn({ w: 0.4, h: 1.8, d: 1, x: 4.75, z: 3.7, color: 0x3a2a1c });
+  furn({ w: 0.5, h: 0.5, d: 0.5, x: 2.5, z: 3.9, color: 0x5b4632 });
+  furn({ w: 0.5, h: 0.4, d: 0.5, x: 3.1, z: 3.95, color: 0x4a3828 });
 
   // Окна (слабо светятся)
   const windowMat = basic(0x6f8fbf);
-  plane(1.2, 1, -6.91, 1.5, -1, Math.PI / 2, windowMat);
-  plane(1.2, 1, 1.2, 1.5, 4.91, Math.PI, windowMat);
+  plane(1.2, 1, -10.91, 1.5, 0.9, Math.PI / 2, windowMat);
+  plane(1.2, 1, -0.5, 1.5, 7.16, Math.PI, windowMat);
 
   // Проёмы для дверей
   const doorways = [];

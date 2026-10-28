@@ -14,10 +14,10 @@ const box = (w, h, d, color) =>
 
 // y — высота поверхности, на которой лежит предмет
 const DEFS = [
-  { id: 'bottle', name: 'Бутылка', throwable: true, x: 5.6, y: 0.8, z: 0.2, make: () => cyl(0.04, 0.25, 0x3fa05a), h: 0.25 },
-  { id: 'can', name: 'Банка', throwable: true, x: 0.2, y: 0.4, z: 3, make: () => cyl(0.05, 0.12, 0xaaaaaa), h: 0.12 },
-  { id: 'keys', name: 'Ключи', throwable: true, x: -2, y: 0.7, z: -0.8, make: () => box(0.09, 0.02, 0.05, 0xd4b24a), h: 0.02 },
-  { id: 'oil', name: 'Масло', throwable: false, x: 4.65, y: 0.9, z: -1.15, make: () => cyl(0.045, 0.22, 0xe0b020), h: 0.22 }
+  { id: 'bottle', name: 'Бутылка', throwable: true, x: 8.5, y: 0.8, z: 1.5, make: () => cyl(0.04, 0.25, 0x3fa05a), h: 0.25 },
+  { id: 'can', name: 'Банка', throwable: true, x: -1.2, y: 0.4, z: 4.5, make: () => cyl(0.05, 0.12, 0xaaaaaa), h: 0.12 },
+  { id: 'keys', name: 'Ключи', throwable: true, x: 2.6, y: 0.7, z: -0.9, make: () => box(0.09, 0.02, 0.05, 0xd4b24a), h: 0.02 },
+  { id: 'oil', name: 'Масло', throwable: false, x: 9.1, y: 0.9, z: -0.125, make: () => cyl(0.045, 0.22, 0xe0b020), h: 0.22 }
 ];
 
 // Предметы: подобрать, бросить (шум 3 в точке падения), смазать дверь маслом
@@ -106,7 +106,7 @@ export function createItems({ scene, camera, colliders, buttons, screen, doors }
     scene.remove(p.mesh); // предмет исчезает; шум 3 в точке падения
     p.mesh.geometry.dispose();
     p.mesh.material.dispose();
-    emitNoise(x, z, 3);
+    emitNoise(x, z, 3, { force: true });
   }
 
   function update(dt, player) {
