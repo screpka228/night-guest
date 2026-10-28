@@ -1,0 +1,286 @@
+import * as THREE from 'three';
+import { isBlocked } from '../three/collision.js';
+
+// Сетка поиска пути: центры клеток лежат на ±0.1 от осей дверей, проём шириной 1.0 даёт 2 свободные клетки
+const CELL = 0.2;
+const X0 = -7.5;
+const Z0 = -3.5;
+const NX = 75;
+const NZ = 45;
+const GHOST_R = 0.28;
+const SEARCH_TIME = 10;
+const LOUD = 1.5;
+
+const SPEED = { patrol: 1.0, investigate: 1.5, chase: 2.5, search: 1.0 };
+
+class MinHeap {
+  constructor() {
+    this.a = [];
+  }
+  get size() {
+    return this.a.length;
+  }
+  push(node) {
+    const a = this.a;
+    a.push(node);
+    let i = a.length - 1;
+    while (i > 0) {
+      const p = (i - 1) >> 1;
+      if (a[p].f <= a[i].f) break;
+      [a[p], a[i]] = [a[i], a[p]];
+      i = p;
+    }
+  }
+  pop() {
+    const a = this.a;
+    const top = a[0];
+    const last = a.pop();
+    if (a.length) {
+      a[0] = last;
+      let i = 0;
+      for (;;) {
+        const l = 2 * i + 1;
+        const r = l + 1;
+        let m = i;
+        if (l < a.length && a[l].f < a[m].f) m = l;
+        if (r < a.length && a[r].f < a[m].f) m = r;
+        if (m === i) break;
+        [a[m], a[i]] = [a[i], a[m]];
+        i = m;
+      }
+    }
+    return top;
+  }
+}
+
+export function createGhost({ scene, colliders, rooms, difficulty }) {
+  // --- сетка проходимости: внутри комнат и не в стенах/мебели ---
+  const free = new Uint8Array(NX * NZ);
+  const cellX = (i) => X0 + (i + 0.5) * CELL;
+  const cellZ = (j) => Z0 + (j + 0.5) * CELL;
+  for (let j = 0; j < NZ; j++) {
+    for (let i = 0; i < NX; i++) {
+      const x = cellX(i);
+      const z = cellZ(j);
+      const inRoom = rooms.some((r) => x > r.x1 && x < r.x2 && z > r.z1 && z < r.z2);
+      free[j * NX + i] = inRoom && !isBlocked(colliders, x, z, GHOST_R) ? 1 : 0;
+    }
+  }
+  const isFree = (i, j) => i >= 0 && j >= 0 && i < NX && j < NZ && free[j * NX + i] === 1;
+  const toCell = (x, z) => [
+    Math.min(NX - 1, Math.max(0, Math.floor((x - X0) / CELL))),
+    Math.min(NZ - 1, Math.max(0, Math.floor((z - Z0) / CELL)))
+  ];
+  function nearestFree(i, j) {
+    if (isFree(i, j)) return [i, j];
+    for (let r = 1; r < 15; r++) {
+      let best = null;
+      let bd = Infinity;
+      for (let dj = -r; dj <= r; dj++) {
+        for (let di = -r; di <= r; di++) {
+          if (Math.max(Math.abs(di), Math.abs(dj)) !== r || !isFree(i + di, j + dj)) continue;
+          const d = di * di + dj * dj;
+          if (d < bd) {
+            bd = d;
+            best = [i + di, j + dj];
+          }
+        }
+      }
+      if (best) return best;
+    }
+    return null;
+  }
+
+  function findPath(sx, sz, tx, tz) {
+    const s = nearestFree(...toCell(sx, sz));
+    const t = nearestFree(...toCell(tx, tz));
+    if (!s || !t) return [];
+    const start = s[1] * NX + s[0];
+    const goal = t[1] * NX + t[0];
+    const g = new Float32Array(NX * NZ).fill(Infinity);
+    const from = new Int32Array(NX * NZ).fill(-1);
+    const closed = new Uint8Array(NX * NZ);
+    const h = (i, j) => {
+      const dx = Math.abs(i - t[0]);
+      const dy = Math.abs(j - t[1]);
+      return Math.max(dx, dy) + 0.414 * Math.min(dx, dy);
+    };
+    const open = new MinHeap();
+    g[start] = 0;
+    open.push({ idx: start, f: h(s[0], s[1]) });
+    while (open.size) {
+      const { idx } = open.pop();
+      if (closed[idx]) continue;
+      closed[idx] = 1;
+      if (idx === goal) break;
+      const ci = idx % NX;
+      const cj = (idx / NX) | 0;
+      for (let dj = -1; dj <= 1; dj++) {
+        for (let di = -1; di <= 1; di++) {
+          if (!di && !dj) continue;
+          const ni = ci + di;
+          const nj = cj + dj;
+          if (!isFree(ni, nj)) continue;
+          if (di && dj && (!isFree(ci + di, cj) || !isFree(ci, cj + dj))) continue; // не режем углы
+          const n = nj * NX + ni;
+          const cost = g[idx] + (di && dj ? 1.414 : 1);
+          if (cost < g[n]) {
+            g[n] = cost;
+            from[n] = idx;
+            open.push({ idx: n, f: cost + h(ni, nj) });
+          }
+        }
+      }
+    }
+    if (from[goal] === -1 && goal !== start) return [];
+    const path = [];
+    for (let n = goal; n !== start; n = from[n]) {
+      path.push({ x: cellX(n % NX), z: cellZ((n / NX) | 0) });
+    }
+    return path.reverse();
+  }
+
+  function randomFreePoint() {
+    for (let k = 0; k < 100; k++) {
+      const i = (Math.random() * NX) | 0;
+      const j = (Math.random() * NZ) | 0;
+      if (isFree(i, j)) return { x: cellX(i), z: cellZ(j) };
+    }
+    return { x: 0, z: 0 };
+  }
+
+  // --- модель: чёрный силуэт и тёмный круг под ним ---
+  const group = new THREE.Group();
+  const body = new THREE.Mesh(
+    new THREE.CapsuleGeometry(0.3, 1.4),
+    new THREE.MeshBasicMaterial({ color: 0x000000 })
+  );
+  body.position.y = 1.0;
+  group.add(body);
+  const shadow = new THREE.Mesh(
+    new THREE.CircleGeometry(0.5, 16),
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.5, depthWrite: false })
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = 0.015;
+  group.add(shadow);
+  scene.add(group);
+
+  // --- состояние ---
+  const pos = { x: -1.0, z: 2.0 }; // гостиная
+  group.position.set(pos.x, 0, pos.z);
+  let state = 'patrol';
+  let path = [];
+  let idx = 0;
+  let wait = 0;
+  let stuck = 0;
+  let searchTimer = 0;
+  let searchCenter = null;
+  let lastHeard = null;
+
+  function goTo(x, z) {
+    path = findPath(pos.x, pos.z, x, z);
+    idx = 0;
+    stuck = 0;
+  }
+  function setState(next, target) {
+    state = next;
+    if (target) goTo(target.x, target.z);
+  }
+
+  function hear(events) {
+    let best = null;
+    let bestDist = 0;
+    for (const e of events) {
+      if (e.intensity <= LOUD) continue;
+      const d = Math.hypot(e.x - pos.x, e.z - pos.z);
+      if (d > difficulty.hearingRadius) continue;
+      if (!best || e.ttl > best.ttl) {
+        best = e;
+        bestDist = d;
+      }
+    }
+    if (!best || best === lastHeard) return;
+    lastHeard = best;
+    searchCenter = { x: best.x, z: best.z };
+    setState(bestDist <= difficulty.hearingRadius / 2 ? 'chase' : 'investigate', best);
+  }
+
+  function move(dt, speed) {
+    const wp = path[idx];
+    const dx = wp.x - pos.x;
+    const dz = wp.z - pos.z;
+    const dist = Math.hypot(dx, dz);
+    if (dist < 0.08) {
+      idx++;
+      return;
+    }
+    const step = Math.min(speed * dt, dist);
+    const nx = pos.x + (dx / dist) * step;
+    const nz = pos.z + (dz / dist) * step;
+    let moved = false;
+    if (!isBlocked(colliders, nx, pos.z, GHOST_R)) {
+      pos.x = nx;
+      moved = true;
+    }
+    if (!isBlocked(colliders, pos.x, nz, GHOST_R)) {
+      pos.z = nz;
+      moved = true;
+    }
+    stuck = moved ? 0 : stuck + dt;
+  }
+
+  function wander() {
+    const a = Math.random() * Math.PI * 2;
+    const r = 0.5 + Math.random() * 2;
+    goTo(searchCenter.x + Math.cos(a) * r, searchCenter.z + Math.sin(a) * r);
+  }
+
+  function update(dt, events) {
+    hear(events);
+    if (state === 'search') {
+      searchTimer -= dt;
+      if (searchTimer <= 0) {
+        setState('patrol');
+        wait = 0;
+        path = [];
+      }
+    }
+
+    if (idx < path.length) {
+      move(dt, SPEED[state] * difficulty.ghostSpeed);
+      if (stuck > 1) {
+        // упёрлись: новая точка или новый путь
+        if (state === 'patrol') {
+          const p = randomFreePoint();
+          goTo(p.x, p.z);
+        } else if (searchCenter) {
+          wander();
+        }
+      }
+    } else {
+      // дошли до цели
+      if (state === 'investigate' || state === 'chase') {
+        state = 'search';
+        searchTimer = SEARCH_TIME;
+        wander();
+      } else if (state === 'search') {
+        wait -= dt;
+        if (wait <= 0) {
+          wait = 0.5 + Math.random();
+          wander();
+        }
+      } else {
+        wait -= dt;
+        if (wait <= 0) {
+          wait = 0.5 + Math.random();
+          const p = randomFreePoint();
+          goTo(p.x, p.z);
+        }
+      }
+    }
+    group.position.set(pos.x, 0, pos.z);
+  }
+
+  return { update, pos, getState: () => state };
+}

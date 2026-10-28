@@ -1,12 +1,15 @@
 import { navigate } from '../router.js';
-import { applySettingsVars } from '../data/settings.js';
+import { applySettingsVars, applyBrightness } from '../data/settings.js';
 import { getDifficulty, getAttemptsLeft } from '../data/difficulty.js';
 import { createGameState, resetGameState, pauseGame, resumeGame } from '../data/game-state.js';
 import { initScene, resizeScene, disposeScene } from '../three/scene.js';
 import { initControls } from '../three/controls.js';
 import { createLoop } from '../three/render.js';
 import { updateNoise, clearNoise, noiseEvents, noiseLevel } from '../game/noise.js';
+import { createGhost } from '../game/ghost.js';
 import { mountPause } from './pause.js';
+
+const cap = (s) => s[0].toUpperCase() + s.slice(1);
 
 export function mountGame(root) {
   createGameState();
@@ -17,31 +20,37 @@ export function mountGame(root) {
     <div class="screen game">
       <canvas id="game-canvas"></canvas>
       <div class="hud">${getDifficulty().name} · Попытки: ${attempts === Infinity ? '∞' : attempts}</div>
-      <div class="noise-meter" data-level="2"><i></i><i></i><i></i></div>
+      <div class="noise-meter" data-level="0"><i></i><i></i><i></i></div>
       <button class="pause-btn" data-pause aria-label="Пауза">⏸</button>
     </div>`;
   const screen = root.querySelector('.game');
   const canvas = root.querySelector('canvas');
+  applyBrightness();
 
   const meter = root.querySelector('.noise-meter');
-  const showNoise = (noise) => {
-    meter.dataset.level = noiseLevel(noise);
-  };
-  showNoise(1);
   clearNoise();
   const debug = new URLSearchParams(location.search).has('debug');
+  const devInfo = debug ? document.createElement('div') : null;
+  if (devInfo) {
+    devInfo.className = 'dev-info';
+    screen.appendChild(devInfo);
+  }
   let logAcc = 0;
 
   let three = null;
   let controls = null;
+  let ghost = null;
   let loop = null;
   try {
     three = initScene(canvas);
-    controls = initControls(three.camera, canvas, {
+    controls = initControls(three.camera, canvas, { colliders: three.colliders, container: screen });
+    ghost = createGhost({
+      scene: three.scene,
       colliders: three.colliders,
-      container: screen,
-      onModeChange: (_mode, m) => showNoise(m.noise)
+      rooms: three.rooms,
+      difficulty: getDifficulty()
     });
+    if (debug) window.__ng = { camera: three.camera, ghost, colliders: three.colliders, noiseEvents };
     loop = createLoop({
       renderer: three.renderer,
       scene: three.scene,
@@ -51,11 +60,18 @@ export function mountGame(root) {
       debug,
       onFrame: (dt) => {
         const s = controls.getState();
-        updateNoise(dt, { x: three.camera.position.x, z: three.camera.position.z, moving: s.moving, noise: s.noise });
-        logAcc += dt;
-        if (debug && logAcc >= 1) {
-          logAcc = 0;
-          console.log('noise events:', noiseEvents.length);
+        const p = three.camera.position;
+        updateNoise(dt, { x: p.x, z: p.z, moving: s.moving, noise: s.noise });
+        ghost.update(dt, noiseEvents);
+        meter.dataset.level = noiseLevel(s.noise);
+        if (devInfo) {
+          const dist = Math.hypot(ghost.pos.x - p.x, ghost.pos.z - p.z);
+          devInfo.textContent = `Игрок: ${cap(s.mode)}\nГость: ${cap(ghost.getState())}  dist=${dist.toFixed(1)}`;
+          logAcc += dt;
+          if (logAcc >= 1) {
+            logAcc = 0;
+            console.log('noise events:', noiseEvents.length);
+          }
         }
       },
       debugText: () => `noise=${noiseEvents.length}`

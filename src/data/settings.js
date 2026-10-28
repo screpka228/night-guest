@@ -29,6 +29,22 @@ export function setSensitivity(v) {
   write(KEYS.sensitivity, v);
 }
 
+export function getBrightness() {
+  const v = parseFloat(read('ng_brightness'));
+  return Number.isFinite(v) ? Math.min(2, Math.max(0.5, v)) : 1;
+}
+
+export function setBrightness(v) {
+  write('ng_brightness', v);
+  applyBrightness();
+}
+
+// CSS-фильтр на canvas игры; работает и из паузы, пока canvas в DOM
+export function applyBrightness() {
+  const canvas = document.getElementById('game-canvas');
+  if (canvas) canvas.style.filter = 'brightness(' + getBrightness() + ')';
+}
+
 export function getJoystickSize() {
   const v = parseInt(read(KEYS.joystickSize), 10);
   return Object.values(JOYSTICK_SIZES).includes(v) ? v : JOYSTICK_SIZES.medium;

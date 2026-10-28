@@ -26,8 +26,9 @@ export function clearNoise() {
   timer = 0;
 }
 
-// 1 деление — тихо, 2 — средне, 3 — громко
+// 0 — стоим, 1 деление — тихо, 2 — средне, 3 — громко
 export function noiseLevel(noise) {
+  if (noise <= 0) return 0;
   if (noise < 0.5) return 1;
   if (noise < 2) return 2;
   return 3;

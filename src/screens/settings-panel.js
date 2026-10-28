@@ -1,6 +1,8 @@
 import {
   JOYSTICK_SIZES,
   getSensitivity,
+  getBrightness,
+  setBrightness,
   setSensitivity,
   getJoystickSize,
   setJoystickSize,
@@ -14,6 +16,7 @@ const SIDE_LABELS = { left: 'Слева', right: 'Справа' };
 // onContinue необязателен: кнопка «Продолжить» показывается только в паузе
 export function mountSettingsPanel(parent, { onBack, onContinue }) {
   const sens = getSensitivity();
+  const bright = getBrightness();
   const size = getJoystickSize();
   const side = getControlsSide();
 
@@ -26,6 +29,10 @@ export function mountSettingsPanel(parent, { onBack, onContinue }) {
       <div class="field">
         <label>Чувствительность камеры: <span data-sens-val>${sens.toFixed(1)}</span></label>
         <input type="range" min="1" max="4" step="0.1" value="${sens}" data-sens />
+      </div>
+      <div class="field">
+        <label>Яркость: <span data-bright-val>${bright.toFixed(1)}</span></label>
+        <input type="range" min="0.5" max="2" step="0.1" value="${bright}" data-bright />
       </div>
       <div class="field">
         <label>Размер джойстика</label>
@@ -51,6 +58,13 @@ export function mountSettingsPanel(parent, { onBack, onContinue }) {
     const v = parseFloat(e.target.value);
     setSensitivity(v);
     val.textContent = v.toFixed(1);
+  });
+
+  const brightVal = el.querySelector('[data-bright-val]');
+  el.querySelector('[data-bright]').addEventListener('input', (e) => {
+    const v = parseFloat(e.target.value);
+    setBrightness(v);
+    brightVal.textContent = v.toFixed(1);
   });
 
   const bindGroup = (group, attr, handler) => {

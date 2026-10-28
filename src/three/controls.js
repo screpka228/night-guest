@@ -1,3 +1,4 @@
+import { isBlocked } from './collision.js';
 import { getSensitivity, getJoystickSize, getControlsSide } from '../data/settings.js';
 
 const MODES = {
@@ -132,17 +133,7 @@ export function initControls(camera, canvas, { colliders, container, onModeChang
   canvas.addEventListener('pointercancel', lookUp);
 
   // --- движение и коллизии ---
-  function blocked(x, z) {
-    for (const c of colliders) {
-      if (
-        Math.abs(x - c.x) < c.w / 2 + PLAYER_RADIUS &&
-        Math.abs(z - c.z) < c.d / 2 + PLAYER_RADIUS
-      ) {
-        return true;
-      }
-    }
-    return false;
-  }
+  const blocked = (x, z) => isBlocked(colliders, x, z, PLAYER_RADIUS);
 
   function update(dt) {
     const mag = Math.min(1, Math.hypot(stick.x, stick.y));
@@ -167,7 +158,8 @@ export function initControls(camera, canvas, { colliders, container, onModeChang
 
   // текущее состояние для шума и HUD
   function getState() {
-    return { mode, noise: MODES[mode].noise, moving: Math.hypot(stick.x, stick.y) > 0.05 };
+    const moving = Math.hypot(stick.x, stick.y) > 0.05;
+    return { mode, noise: moving ? MODES[mode].noise : 0, moving };
   }
 
   function reset() {

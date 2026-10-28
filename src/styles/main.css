@@ -248,3 +248,14 @@ input[type='range']::-moz-range-thumb {
 .mode-btn { min-width: 110px; padding: 8px 16px; background: rgba(26, 26, 26, 0.6); }
 .mode-btn.active-run { border-color: #a33; background: rgba(90, 20, 20, 0.7); color: #ff7777; }
 .mode-btn.active-crouch { border-color: #38c; background: rgba(20, 40, 90, 0.7); color: #7ab4ff; }
+
+.mode-buttons, .mode-btn, .joystick, .pause-btn { touch-action: none; }
+.dev-info {
+  position: absolute;
+  top: calc(76px + env(safe-area-inset-top));
+  left: calc(8px + env(safe-area-inset-left));
+  font-size: 12px;
+  color: #fc6;
+  pointer-events: none;
+  white-space: pre;
+}
