@@ -1,6 +1,6 @@
 import { navigate } from '../router.js';
 import { applySettingsVars, applyBrightness } from '../data/settings.js';
-import { getDifficulty, getAttemptsLeft, spendAttempt } from '../data/difficulty.js';
+import { getDifficulty, getDifficultyKey, getAttemptsLeft, spendAttempt } from '../data/difficulty.js';
 import { createGameState, resetGameState, pauseGame, resumeGame } from '../data/game-state.js';
 import { initScene, resizeScene, disposeScene } from '../three/scene.js';
 import { initControls } from '../three/controls.js';
@@ -11,6 +11,7 @@ import { playScream } from '../game/sfx.js';
 import { mountPause } from './pause.js';
 import { mountGameOver } from './gameover.js';
 
+const CATCH_DISTANCE = 1.2;
 const cap = (s) => s[0].toUpperCase() + s.slice(1);
 
 export function mountGame(root) {
@@ -56,12 +57,17 @@ export function mountGame(root) {
   let loop = null;
   try {
     three = initScene(canvas);
-    controls = initControls(three.camera, canvas, { colliders: three.colliders, container: screen });
     ghost = createGhost({
       scene: three.scene,
       colliders: three.colliders,
       rooms: three.rooms,
-      difficulty: getDifficulty()
+      difficulty: getDifficulty(),
+      practice: getDifficultyKey() === 'practice'
+    });
+    controls = initControls(three.camera, canvas, {
+      colliders: three.colliders,
+      dynamicColliders: [ghost.collider], // сквозь гостя не пройти
+      container: screen
     });
     if (debug) window.__ng = { camera: three.camera, ghost, colliders: three.colliders, noiseEvents };
     loop = createLoop({
@@ -76,7 +82,8 @@ export function mountGame(root) {
         const p = three.camera.position;
         updateNoise(dt, { x: p.x, z: p.z, moving: s.moving, noise: s.noise });
         ghost.update(dt, noiseEvents);
-        if (!dead && ghost.getState() === 'chase' && Math.hypot(ghost.pos.x - p.x, ghost.pos.z - p.z) < 1.0) {
+        // поимка не зависит от состояния гостя: подошёл вплотную — поймал
+        if (!dead && Math.hypot(ghost.pos.x - p.x, ghost.pos.z - p.z) < CATCH_DISTANCE) {
           caught();
           return;
         }

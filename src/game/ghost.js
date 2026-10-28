@@ -9,7 +9,11 @@ const NX = 75;
 const NZ = 45;
 const GHOST_R = 0.28;
 const SEARCH_TIME = 10;
-const LOUD = 1.5;
+// Порог слышимости: шаг (1) слышен везде, кроме практики; присед (0.3) не слышен
+const HEAR_STEP = 0.9;
+const HEAR_PRACTICE = 1.5;
+const CHASE_CLOSE = 3; // шагом ближе 3 м — погоня
+const RUN_NOISE = 3;
 
 const SPEED = { patrol: 1.0, investigate: 1.5, chase: 2.5, search: 1.0 };
 
@@ -53,7 +57,7 @@ class MinHeap {
   }
 }
 
-export function createGhost({ scene, colliders, rooms, difficulty }) {
+export function createGhost({ scene, colliders, rooms, difficulty, practice = false }) {
   // --- сетка проходимости: внутри комнат и не в стенах/мебели ---
   const free = new Uint8Array(NX * NZ);
   const cellX = (i) => X0 + (i + 0.5) * CELL;
@@ -170,6 +174,8 @@ export function createGhost({ scene, colliders, rooms, difficulty }) {
   // --- состояние ---
   const pos = { x: -1.0, z: 2.0 }; // гостиная
   group.position.set(pos.x, 0, pos.z);
+  // динамический коллайдер для игрока (в общий список не добавляем: гость бы блокировал сам себя)
+  const collider = { x: pos.x, z: pos.z, w: 0.6, d: 0.6 };
   let state = 'patrol';
   let path = [];
   let idx = 0;
@@ -201,7 +207,7 @@ export function createGhost({ scene, colliders, rooms, difficulty }) {
     let best = null;
     let bestDist = 0;
     for (const e of events) {
-      if (e.intensity <= LOUD) continue;
+      if (e.intensity <= (practice ? HEAR_PRACTICE : HEAR_STEP)) continue;
       const d = Math.hypot(e.x - pos.x, e.z - pos.z);
       if (d > difficulty.hearingRadius) continue;
       if (!best || e.ttl > best.ttl) {
@@ -213,7 +219,9 @@ export function createGhost({ scene, colliders, rooms, difficulty }) {
     lastHeard = best;
     searchCenter = { x: best.x, z: best.z };
     searchRoom = roomAt(searchCenter);
-    setState(bestDist <= difficulty.hearingRadius / 2 ? 'chase' : 'investigate', best);
+    // бег или близкий шум — погоня, иначе идём проверять звук
+    const chase = best.intensity >= RUN_NOISE || bestDist < CHASE_CLOSE;
+    setState(chase ? 'chase' : 'investigate', best);
   }
 
   function move(dt, speed) {
@@ -315,7 +323,9 @@ export function createGhost({ scene, colliders, rooms, difficulty }) {
       }
     }
     group.position.set(pos.x, 0, pos.z);
+    collider.x = pos.x;
+    collider.z = pos.z;
   }
 
-  return { update, pos, getState: () => state };
+  return { update, pos, collider, getState: () => state };
 }

@@ -12,7 +12,7 @@ const PLAYER_RADIUS = 0.3;
 const THUMB_MAX = 40;
 const PITCH_LIMIT = Math.PI / 3;
 
-export function initControls(camera, canvas, { colliders, container, onModeChange }) {
+export function initControls(camera, canvas, { colliders, dynamicColliders = [], container, onModeChange }) {
   let sensitivity = getSensitivity();
   let side = getControlsSide();
 
@@ -39,8 +39,12 @@ export function initControls(camera, canvas, { colliders, container, onModeChang
     });
     onModeChange?.(mode, MODES[mode]);
   }
+  // pointerdown надёжнее click при мультитаче (пальцы на джойстике и камере)
   buttons.querySelectorAll('.mode-btn').forEach((b) =>
-    b.addEventListener('click', () => setMode(b.dataset.mode))
+    b.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      setMode(b.dataset.mode);
+    })
   );
 
   function applyLayout() {
@@ -105,6 +109,7 @@ export function initControls(camera, canvas, { colliders, container, onModeChang
   };
   base.addEventListener('pointerup', stickUp);
   base.addEventListener('pointercancel', stickUp);
+  base.addEventListener('lostpointercapture', stickUp);
 
   // --- поворот камеры ---
   let lookId = null;
@@ -131,9 +136,25 @@ export function initControls(camera, canvas, { colliders, container, onModeChang
   };
   canvas.addEventListener('pointerup', lookUp);
   canvas.addEventListener('pointercancel', lookUp);
+  canvas.addEventListener('lostpointercapture', lookUp);
+
+  // палец мог отпуститься вне элемента — сбрасываем глобально
+  const globalUp = (e) => {
+    if (e.pointerId === stickId) endStick();
+    if (e.pointerId === lookId) lookId = null;
+  };
+  const resetAll = () => {
+    endStick();
+    lookId = null;
+  };
+  window.addEventListener('pointerup', globalUp);
+  window.addEventListener('pointercancel', globalUp);
+  window.addEventListener('blur', resetAll);
+  document.addEventListener('visibilitychange', resetAll);
 
   // --- движение и коллизии ---
-  const blocked = (x, z) => isBlocked(colliders, x, z, PLAYER_RADIUS);
+  const blocked = (x, z) =>
+    isBlocked(colliders, x, z, PLAYER_RADIUS) || isBlocked(dynamicColliders, x, z, PLAYER_RADIUS);
 
   function update(dt) {
     const mag = Math.min(1, Math.hypot(stick.x, stick.y));
@@ -168,6 +189,10 @@ export function initControls(camera, canvas, { colliders, container, onModeChang
   }
 
   function dispose() {
+    window.removeEventListener('pointerup', globalUp);
+    window.removeEventListener('pointercancel', globalUp);
+    window.removeEventListener('blur', resetAll);
+    document.removeEventListener('visibilitychange', resetAll);
     base.remove();
     buttons.remove();
   }
