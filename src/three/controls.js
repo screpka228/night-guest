@@ -28,6 +28,7 @@ export function initControls(camera, canvas, { colliders, dynamicColliders = [],
   // --- режимы движения ---
   let mode = 'walk';
   let eye = MODES.walk.eye;
+  let eyeOverride = null; // в вентиляции камера ещё ниже
 
   const buttons = document.createElement('div');
   buttons.className = 'mode-buttons';
@@ -190,7 +191,7 @@ export function initControls(camera, canvas, { colliders, dynamicColliders = [],
       if (!blocked(nx, camera.position.z)) camera.position.x = nx;
       if (!blocked(camera.position.x, nz)) camera.position.z = nz;
     }
-    eye += (MODES[mode].eye - eye) * Math.min(1, dt * 10);
+    eye += ((eyeOverride ?? MODES[mode].eye) - eye) * Math.min(1, dt * 10);
     camera.position.y = eye;
   }
 
@@ -235,5 +236,5 @@ export function initControls(camera, canvas, { colliders, dynamicColliders = [],
     buttons.remove();
   }
 
-  return { modeButtons: buttons, update, reset, applyLayout, getState, look: applyLook, hide, show, isHidden: () => !!hidden, dispose };
+  return { modeButtons: buttons, forceMode: (m) => mode !== m && setMode(m), setEyeOverride: (v) => { eyeOverride = v; }, update, reset, applyLayout, getState, look: applyLook, hide, show, isHidden: () => !!hidden, dispose };
 }

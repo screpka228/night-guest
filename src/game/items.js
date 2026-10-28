@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import { emitNoise } from './noise.js';
+import { playImpact } from './sfx.js';
 import { isBlocked } from '../three/collision.js';
 
 const PICK_RADIUS = 1.5;
-const THROW_SPEED = 7;
-const THROW_LIFT = 2.5;
+const THROW_SPEED = 8;
+const THROW_LIFT = 3;
 const GRAVITY = 9.8;
 
 const cyl = (r, h, color) =>
@@ -12,28 +13,34 @@ const cyl = (r, h, color) =>
 const box = (w, h, d, color) =>
   new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshBasicMaterial({ color }));
 
-// y — высота поверхности, на которой лежит предмет
+// y — высота поверхности, на которой лежит предмет; icon — цвет и форма в слоте HUD
 const DEFS = [
-  { id: 'bottle', name: 'Бутылка', throwable: true, x: 8.5, y: 0.8, z: 1.5, make: () => cyl(0.04, 0.25, 0x3fa05a), h: 0.25 },
-  { id: 'can', name: 'Банка', throwable: true, x: -1.2, y: 0.4, z: 4.5, make: () => cyl(0.05, 0.12, 0xaaaaaa), h: 0.12 },
-  { id: 'keys', name: 'Ключи', throwable: true, x: 2.6, y: 0.7, z: -0.9, make: () => box(0.09, 0.02, 0.05, 0xd4b24a), h: 0.02 },
-  { id: 'oil', name: 'Масло', throwable: false, x: 9.1, y: 0.9, z: -0.125, make: () => cyl(0.045, 0.22, 0xe0b020), h: 0.22 }
+  { id: 'bottle', name: 'Бутылка', throwable: true, x: 8.5, y: 0.8, z: 1.5, h: 0.25, icon: ['#3fa05a', 'cyl'], make: () => cyl(0.04, 0.25, 0x3fa05a) },
+  { id: 'can', name: 'Банка', throwable: true, x: -1.2, y: 0.4, z: 4.5, h: 0.12, icon: ['#aaaaaa', 'cyl'], make: () => cyl(0.05, 0.12, 0xaaaaaa) },
+  { id: 'keys', name: 'Ключи', throwable: true, x: 2.6, y: 0.7, z: -0.9, h: 0.02, icon: ['#e0c040', 'box'], make: () => box(0.09, 0.02, 0.05, 0xe0c040) },
+  { id: 'oil', name: 'Масло', throwable: false, x: 9.1, y: 0.9, z: -0.125, h: 0.22, icon: ['#8a5a20', 'cyl'], make: () => cyl(0.045, 0.22, 0x8a5a20) }
 ];
 
-// Предметы: подобрать, бросить (шум 3 в точке падения), смазать дверь маслом
-export function createItems({ scene, camera, colliders, buttons, screen, doors }) {
+// Предметы: state.heldItem, слот HUD, бросок (шум 3 в точке падения), масло для дверей, ключи у входной двери
+export function createItems({ scene, camera, colliders, buttons, screen, doors, frontDoor }) {
+  const state = { heldItem: null }; // { type, mesh }
+
   const objects = DEFS.map((d) => {
     const mesh = d.make();
     mesh.position.set(d.x, d.y + d.h / 2 + 0.005, d.z);
     scene.add(mesh);
-    return { def: d, mesh, taken: false };
+    return { def: d, mesh };
   });
-  let held = null;
   const projectiles = [];
 
-  const heldEl = document.createElement('div');
-  heldEl.className = 'held-hud';
-  screen.appendChild(heldEl);
+  // --- HUD: слот 60×60 и подпись ---
+  const slot = document.createElement('div');
+  slot.className = 'item-slot';
+  const icon = document.createElement('i');
+  slot.appendChild(icon);
+  const label = document.createElement('div');
+  label.className = 'item-label';
+
   const toast = document.createElement('div');
   toast.className = 'toast';
   toast.hidden = true;
@@ -45,10 +52,24 @@ export function createItems({ scene, camera, colliders, buttons, screen, doors }
     toastTimer = 2;
   };
 
-  const mk = (label, attr) => {
+  function renderHeld() {
+    const d = state.heldItem && DEFS.find((x) => x.id === state.heldItem.type);
+    slot.classList.toggle('full', !!d);
+    if (d) {
+      icon.style.background = d.icon[0];
+      icon.className = d.icon[1];
+      label.textContent = 'В руках: ' + d.name;
+    } else {
+      icon.className = '';
+      icon.style.background = 'none';
+      label.textContent = '';
+    }
+  }
+
+  const mk = (text, attr) => {
     const b = document.createElement('button');
     b.className = 'mode-btn item-btn';
-    b.textContent = label;
+    b.textContent = text;
     b.dataset[attr] = '';
     b.hidden = true;
     return b;
@@ -56,11 +77,14 @@ export function createItems({ scene, camera, colliders, buttons, screen, doors }
   const pickBtn = mk('Подобрать', 'pick');
   const throwBtn = mk('Бросить', 'throw');
   const oilBtn = mk('Смазать', 'oil');
-  buttons.prepend(pickBtn, throwBtn, oilBtn);
+  const openBtn = mk('Открыть', 'open');
+  buttons.prepend(slot, label, pickBtn, throwBtn, oilBtn, openBtn);
   const runBtn = buttons.querySelector('[data-mode="run"]');
+  renderHeld();
 
   let nearObj = null;
   let nearDoor = null;
+  let nearFront = false;
 
   const press = (btn, fn) =>
     btn.addEventListener('pointerdown', (e) => {
@@ -68,69 +92,77 @@ export function createItems({ scene, camera, colliders, buttons, screen, doors }
       fn();
     });
 
+  // подбор: предмет убирается из сцены, попадает в руки
   press(pickBtn, () => {
-    if (!nearObj || held) return;
-    nearObj.taken = true;
+    if (!nearObj || state.heldItem) return;
     nearObj.mesh.visible = false;
-    held = nearObj.def;
-    heldEl.textContent = 'В руках: ' + held.name;
+    state.heldItem = { type: nearObj.def.id, mesh: nearObj.mesh };
+    nearObj.taken = true;
+    renderHeld();
   });
 
+  // бросок: новый снаряд в 0.5 м перед камерой, скорость вперёд*8 + 3 вверх
   press(throwBtn, () => {
-    if (!held || !held.throwable) return;
-    const obj = objects.find((o) => o.def === held);
+    const held = state.heldItem;
+    const def = held && DEFS.find((d) => d.id === held.type);
+    if (!def || !def.throwable) return;
     const dir = new THREE.Vector3();
     camera.getWorldDirection(dir);
-    const mesh = obj.mesh;
-    mesh.visible = true;
-    mesh.position.copy(camera.position).addScaledVector(dir, 0.4);
+    const mesh = def.make();
+    mesh.position.copy(camera.position).addScaledVector(dir, 0.5);
+    scene.add(mesh);
     projectiles.push({
       mesh,
-      vx: dir.x * THROW_SPEED,
-      vy: dir.y * THROW_SPEED + THROW_LIFT,
-      vz: dir.z * THROW_SPEED
+      v: new THREE.Vector3(dir.x * THROW_SPEED, dir.y * THROW_SPEED + THROW_LIFT, dir.z * THROW_SPEED)
     });
-    held = null;
-    heldEl.textContent = '';
+    state.heldItem = null;
+    renderHeld();
   });
 
   press(oilBtn, () => {
-    if (!held || held.id !== 'oil' || !nearDoor) return;
-    nearDoor.oiled = true;
-    held = null;
-    heldEl.textContent = '';
+    if (!state.heldItem || state.heldItem.type !== 'oil' || !nearDoor) return;
+    nearDoor.creaky = false; // дверь больше не скрипит
+    state.heldItem = null;
+    renderHeld();
     showToast('Дверь смазана');
   });
 
+  // заглушка будущей концовки A
+  press(openBtn, () => {
+    if (!state.heldItem || state.heldItem.type !== 'keys' || !nearFront) return;
+    setTimeout(() => alert('Ключи подошли, но дверь пока заблокирована'), 0);
+  });
+
   function land(p, x, z) {
-    scene.remove(p.mesh); // предмет исчезает; шум 3 в точке падения
+    scene.remove(p.mesh);
     p.mesh.geometry.dispose();
     p.mesh.material.dispose();
-    emitNoise(x, z, 3, { force: true });
+    emitNoise(x, z, 3, { force: true, loud: true }); // метка в общий массив noiseEvents
+    playImpact();
   }
 
   function update(dt, player) {
-    // снаряды: дуга под действием гравитации, стены останавливают
+    // полёт: pos += v*dt, v.y -= 9.8*dt; падение на пол или стену — шум
     for (let i = projectiles.length - 1; i >= 0; i--) {
       const p = projectiles[i];
       const pos = p.mesh.position;
-      p.vy -= GRAVITY * dt;
-      const nx = pos.x + p.vx * dt;
-      const nz = pos.z + p.vz * dt;
-      const ny = pos.y + p.vy * dt;
-      let hit = false;
-      if (ny < 2.7 && isBlocked(colliders, nx, nz, 0.05) && ny < 2.05) {
-        hit = true; // стена или мебель: падает у препятствия
-      } else {
-        pos.set(nx, Math.min(ny, 2.65), nz);
+      p.v.y -= GRAVITY * dt;
+      const nx = pos.x + p.v.x * dt;
+      const nz = pos.z + p.v.z * dt;
+      const ny = pos.y + p.v.y * dt;
+      if (ny < 2.05 && isBlocked(colliders, nx, nz, 0.05)) {
+        land(p, pos.x, pos.z); // стена или мебель
+        projectiles.splice(i, 1);
+        continue;
       }
-      if (hit || ny <= 0.05) {
-        land(p, pos.x, pos.z);
+      pos.set(nx, Math.min(ny, 2.65), nz);
+      if (ny <= 0) {
+        land(p, nx, nz);
         projectiles.splice(i, 1);
       }
     }
 
-    // ближайший предмет и дверь
+    const held = state.heldItem;
     nearObj = null;
     if (!held) {
       let bd = PICK_RADIUS;
@@ -143,11 +175,15 @@ export function createItems({ scene, camera, colliders, buttons, screen, doors }
         }
       }
     }
-    nearDoor = held && held.id === 'oil' ? doors.nearest(player, PICK_RADIUS) : null;
+    nearDoor = held && held.type === 'oil' ? doors.nearest(player, PICK_RADIUS) : null;
+    nearFront = !!held && held.type === 'keys' && Math.hypot(player.x - frontDoor.x, player.z - frontDoor.z) <= PICK_RADIUS;
+    const def = held && DEFS.find((d) => d.id === held.type);
 
     pickBtn.hidden = !nearObj;
-    throwBtn.hidden = !(held && held.throwable);
+    // «Смазать» вместо «Бросить», когда в руках масло
+    throwBtn.hidden = !(def && def.throwable);
     oilBtn.hidden = !nearDoor;
+    openBtn.hidden = !nearFront;
     if (runBtn) runBtn.style.display = throwBtn.hidden ? '' : 'none'; // «Бросить» заменяет «Бег»
 
     if (toastTimer > 0) {
@@ -157,13 +193,10 @@ export function createItems({ scene, camera, colliders, buttons, screen, doors }
   }
 
   function dispose() {
-    heldEl.remove();
     toast.remove();
-    pickBtn.remove();
-    throwBtn.remove();
-    oilBtn.remove();
+    for (const el of [slot, label, pickBtn, throwBtn, oilBtn, openBtn]) el.remove();
     if (runBtn) runBtn.style.display = '';
   }
 
-  return { update, dispose, get held() { return held; } };
+  return { update, dispose, state };
 }

@@ -215,7 +215,7 @@ export function createGhost({ scene, colliders, rooms, difficulty, practice = fa
     for (const e of events) {
       if (e.intensity <= (practice ? HEAR_PRACTICE : HEAR_STEP)) continue;
       const d = Math.hypot(e.x - pos.x, e.z - pos.z);
-      if (d > difficulty.hearingRadius) continue;
+      if (d > difficulty.hearingRadius * (e.loud ? 2 : 1)) continue; // бросок слышно вдвое дальше
       if (!best || e.ttl > best.ttl) {
         best = e;
         bestDist = d;

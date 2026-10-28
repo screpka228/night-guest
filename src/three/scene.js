@@ -4,6 +4,8 @@ const WALL_T = 0.15;
 const WALL_H = 2.7;
 const DOOR_W = 1.0;
 const DOOR_H = 2.1;
+const VENT_Y1 = 0.2;
+const VENT_Y2 = 1.0;
 
 // Комнаты: прямоугольники в метрах (x → восток, z → юг)
 const ROOM_DEFS = [
@@ -21,9 +23,9 @@ const WALLS = [
   [true, -2.5, -11, -5], [true, 2.5, -11, -5],
   [true, -1.25, -5, 5, [0]],
   [true, 1.25, -5, 5, [-1.4, 3.4]],
-  [true, -4.25, -1.5, 1.5],
+  [true, -4.25, -1.5, 1.5, [], [0]], // вентиляция из ванной (проём 1.0×0.8 на высоте 0.2)
   [true, 7.25, -5, 2],
-  [true, 4.25, 2, 5],
+  [true, 4.25, 2, 5, [], [3.5]], // вентиляция в кладовке
   [true, -0.5, 5, 11], [true, 3.5, 5, 11],
   [false, -11, -2.5, 2.5],
   [false, -5, -2.5, 7.25, [0, 1.8]],
@@ -98,16 +100,48 @@ export function initScene(canvas) {
     scene.add(mesh);
     if (collide) colliders.push({ x, z, w, d });
   }
-  for (const [horizontal, fixed, a0, b0, doors = []] of WALLS) {
+  for (const [horizontal, fixed, a0, b0, doors = [], ventGaps = []] of WALLS) {
     const a = a0 - WALL_T / 2; // закрываем углы
     const b = b0 + WALL_T / 2;
+    const gaps = [...doors.map((c) => ({ c, vent: false })), ...ventGaps.map((c) => ({ c, vent: true }))].sort(
+      (p, q) => p.c - q.c
+    );
     let cursor = a;
-    for (const c of [...doors].sort((p, q) => p - q)) {
+    for (const { c, vent } of gaps) {
       wallPiece(horizontal, fixed, cursor, c - DOOR_W / 2, 0, WALL_H, true);
-      wallPiece(horizontal, fixed, c - DOOR_W / 2, c + DOOR_W / 2, DOOR_H, WALL_H, false);
+      if (vent) {
+        // над и под проёмом — стена без коллайдера (низкий лаз)
+        wallPiece(horizontal, fixed, c - DOOR_W / 2, c + DOOR_W / 2, 0, VENT_Y1, false);
+        wallPiece(horizontal, fixed, c - DOOR_W / 2, c + DOOR_W / 2, VENT_Y2, WALL_H, false);
+      } else {
+        wallPiece(horizontal, fixed, c - DOOR_W / 2, c + DOOR_W / 2, DOOR_H, WALL_H, false);
+      }
       cursor = c + DOOR_W / 2;
     }
     wallPiece(horizontal, fixed, cursor, b, 0, WALL_H, true);
+  }
+
+  // Вентиляционные туннели 3 м: за стеной в пустоте; на конце игрока выносит в другую комнату
+  const tunnelMat = mat(0x3a4044);
+  const vents = [
+    { id: 'bath', entry: { x: 0, z: -4.25 }, dir: { x: 0, z: -1 }, exit: { x: 3.5, z: 3.4 } },
+    { id: 'storage', entry: { x: 3.5, z: 4.25 }, dir: { x: 0, z: 1 }, exit: { x: 0, z: -3.4 } }
+  ];
+  for (const v of vents) {
+    const len = 3;
+    const cz = v.entry.z + v.dir.z * (len / 2);
+    const endZ = v.entry.z + v.dir.z * len;
+    const part = (w, h, d, x, y, z, collide) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), tunnelMat);
+      m.position.set(x, y, z);
+      scene.add(m);
+      if (collide) colliders.push({ x, z, w, d });
+    };
+    part(1.1, 0.04, len, v.entry.x, VENT_Y1 - 0.02, cz, false); // пол
+    part(1.1, 0.04, len, v.entry.x, VENT_Y2 + 0.02, cz, false); // потолок
+    part(0.05, VENT_Y2 - VENT_Y1, len, v.entry.x - 0.525, (VENT_Y1 + VENT_Y2) / 2, cz, true);
+    part(0.05, VENT_Y2 - VENT_Y1, len, v.entry.x + 0.525, (VENT_Y1 + VENT_Y2) / 2, cz, true);
+    part(1.1, VENT_Y2 - VENT_Y1, 0.05, v.entry.x, (VENT_Y1 + VENT_Y2) / 2, endZ + v.dir.z * 0.025, true);
   }
 
   // --- мебель ---
@@ -177,7 +211,7 @@ export function initScene(canvas) {
   furn({ w: 0.6, h: 0.9, d: 0.6, x: 9.7, z: -0.125, color: 0x4a4038 });
 
   // Ванная (x -1.5..1.5, z -4.25..-1.25)
-  furn({ w: 1.7, h: 0.6, d: 0.8, x: 0.6, z: -3.75, color: 0xcfd4d6 });
+  furn({ w: 0.8, h: 0.6, d: 1.7, x: 1.05, z: -3.2, color: 0xcfd4d6 }); // у восточной стены, вентиляция в северной свободна
   furn({ w: 0.4, h: 0.85, d: 0.5, x: -1.25, z: -2.4, color: 0xcfd4d6 });
   plane(0.6, 0.8, -1.42, 1.5, -2.4, Math.PI / 2, basic(0x888888));
 
@@ -194,7 +228,11 @@ export function initScene(canvas) {
   // Кладовка (x 2..5, z 1.25..4.25)
   furn({ w: 0.4, h: 1.8, d: 1, x: 4.75, z: 3.7, color: 0x3a2a1c });
   furn({ w: 0.5, h: 0.5, d: 0.5, x: 2.5, z: 3.9, color: 0x5b4632 });
-  furn({ w: 0.5, h: 0.4, d: 0.5, x: 3.1, z: 3.95, color: 0x4a3828 });
+  furn({ w: 0.5, h: 0.4, d: 0.5, x: 2.5, z: 3.2, color: 0x4a3828 });
+
+  // Входная дверь (заглушка концовки A): восточная стена кухни
+  const frontDoor = { x: 11, z: 2.2 };
+  plane(0.95, 2.05, 10.91, 1.025, 2.2, -Math.PI / 2, mat(0x6a2a22));
 
   // Окна (слабо светятся)
   const windowMat = basic(0x6f8fbf);
@@ -207,7 +245,7 @@ export function initScene(canvas) {
     for (const c of doors) doorways.push(horizontal ? { x: c, z: fixed, horizontal } : { x: fixed, z: c, horizontal });
   }
 
-  return { scene, camera, renderer, rooms, colliders, closets, doorways };
+  return { scene, camera, renderer, rooms, colliders, closets, doorways, vents, frontDoor };
 }
 
 export function resizeScene({ camera, renderer }) {

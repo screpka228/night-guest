@@ -371,3 +371,20 @@ input[type='range']::-moz-range-thumb {
 }
 .quiet-hud[hidden] { display: none; }
 @keyframes blink { 50% { opacity: 0.2; } }
+
+.item-slot {
+  width: 60px;
+  height: 60px;
+  align-self: flex-end;
+  border: 1px solid #555;
+  background: rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.item-slot.full { background: rgba(255, 255, 255, 0.15); border-color: #aaa; }
+.item-slot i.cyl { display: block; width: 20px; height: 38px; border-radius: 6px; }
+.item-slot i.box { display: block; width: 36px; height: 14px; }
+.item-label { align-self: flex-end; font-size: 12px; color: #d0d0d0; min-height: 14px; pointer-events: none; }
+.held-hud { display: none; }

@@ -9,6 +9,7 @@ import { createHiding } from '../game/hiding.js';
 import { createDoors } from '../game/doors.js';
 import { createItems } from '../game/items.js';
 import { createPhone } from '../game/phone.js';
+import { createVents } from '../game/vents.js';
 import { updateNoise, clearNoise, noiseEvents, noiseLevel, quietLeft } from '../game/noise.js';
 import { createGhost } from '../game/ghost.js';
 import { playScream } from '../game/sfx.js';
@@ -51,6 +52,7 @@ export function mountGame(root) {
   let doors = null;
   let items = null;
   let phone = null;
+  let vents = null;
   let nearCloset = null;
   const hideBtn = root.querySelector('[data-hide]');
   const quietHud = root.querySelector('.quiet-hud');
@@ -100,11 +102,13 @@ export function mountGame(root) {
       colliders: three.colliders,
       buttons: controls.modeButtons,
       screen,
-      doors
+      doors,
+      frontDoor: three.frontDoor
     });
+    vents = createVents({ vents: three.vents, camera: three.camera, controls, container: screen });
     phone = createPhone({ container: screen, difficulty: getDifficulty() });
     hiding = createHiding({ container: screen, camera: three.camera, controls, onCaught: caught });
-    if (debug) window.__ng = { camera: three.camera, ghost, colliders: three.colliders, noiseEvents, hiding, doors, items, phone, difficulty: getDifficulty() };
+    if (debug) window.__ng = { camera: three.camera, ghost, colliders: three.colliders, noiseEvents, hiding, doors, items, phone, vents, difficulty: getDifficulty() };
     loop = createLoop({
       renderer: three.renderer,
       scene: three.scene,
@@ -117,6 +121,7 @@ export function mountGame(root) {
         const p = three.camera.position;
         updateNoise(dt, { x: p.x, z: p.z, moving: s.moving, noise: s.noise });
         hiding.update(dt, ghost);
+        if (!hiding.active) vents.update(dt);
         doors.update(dt, { x: p.x, z: p.z });
         items.update(dt, { x: p.x, z: p.z });
         phone.update(dt, { x: p.x, z: p.z });
@@ -141,7 +146,12 @@ export function mountGame(root) {
         meter.dataset.level = noiseLevel(s.noise);
         if (devInfo) {
           const dist = Math.hypot(ghost.pos.x - p.x, ghost.pos.z - p.z);
-          devInfo.textContent = `Игрок: ${cap(s.mode)}\n${hiding.active ? 'В шкафу, ' : ''}Гость: ${cap(ghost.getState())}${ghost.isListening() ? ' (слушает)' : ''}  dist=${dist.toFixed(1)}`;
+          const last = noiseEvents[noiseEvents.length - 1];
+          devInfo.textContent =
+            `Игрок: ${cap(s.mode)}\n${hiding.active ? 'В шкафу, ' : ''}Гость: ${cap(ghost.getState())}${ghost.isListening() ? ' (слушает)' : ''}  dist=${dist.toFixed(1)}` +
+            `\nВ руках: ${items.state.heldItem ? items.state.heldItem.type : 'пусто'}` +
+            `\nМетки шума: ${noiseEvents.length}` +
+            `\nПоследняя метка: ${last ? `${last.x.toFixed(1)}, ${last.z.toFixed(1)}, ${last.intensity}` : '—'}`;
           logAcc += dt;
           if (logAcc >= 1) {
             logAcc = 0;
@@ -190,6 +200,7 @@ export function mountGame(root) {
     gameOver?.destroy();
     hiding?.dispose();
     items?.dispose();
+    vents?.dispose();
     phone?.dispose();
     loop?.dispose();
     controls?.dispose();
