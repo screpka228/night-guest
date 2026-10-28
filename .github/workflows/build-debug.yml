@@ -1,0 +1,28 @@
+name: Build Debug APK
+on:
+  push: { branches: [main] }
+  workflow_dispatch:
+permissions: { contents: write }
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - run: npm ci
+      - run: npm run build
+      - run: npx cap add android
+      - run: npx cap sync android
+      - run: cd android && chmod +x gradlew && ./gradlew assembleDebug
+      - run: mkdir -p artifacts && cp android/app/build/outputs/apk/debug/app-debug.apk artifacts/night-guest-debug.apk
+      - uses: actions/upload-artifact@v4
+        with: { name: debug-apk, path: artifacts/night-guest-debug.apk }
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-debug
+          name: Latest debug build
+          prerelease: true
+          files: artifacts/night-guest-debug.apk
