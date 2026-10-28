@@ -1,11 +1,15 @@
 import { emitNoise } from './noise.js';
 import { startBreathSound } from './sfx.js';
 
-const BASE_ZONE = 0.3;
-const NEAR_ZONE = 0.15;
+const BASE_ZONE = 0.4;
+const NEAR_ZONE = 0.25;
 const NEAR_DIST = 3;
-const DRIFT = 0.35; // доля ширины полоски в секунду
-const TAP_PUSH = 0.15;
+const DRIFT = 0.175; // доля ширины полоски в секунду
+const NEAR_DRIFT_K = 1.3; // рядом с гостем дрейф чуть быстрее
+const TAP_PUSH = 0.3;
+const PUSH_RATE = 7; // затухание импульса тапа: маркер плавно «едет» к центру
+const ZONE_RATE = 0.15; // доля полоски в секунду: зона сужается плавно
+const GRACE = 1.5; // окно прощения в красной зоне, сек
 const SUFFOCATE_AFTER = 40;
 const SUFFOCATE_STEP = 5;
 const SUFFOCATE_SHRINK = 0.03;
@@ -21,6 +25,10 @@ export function createHiding({ container, camera, controls, onCaught }) {
     closet: null,
     t: 0,
     marker: 0.5,
+    push: 0,
+    width: BASE_ZONE,
+    speedK: 1,
+    redTime: 0,
     vel: 0,
     target: 0,
     velTimer: 0,
@@ -44,11 +52,14 @@ export function createHiding({ container, camera, controls, onCaught }) {
       if (pid === null) {
         pid = e.pointerId;
         last = { x: e.clientX, y: e.clientY };
-        tap.setPointerCapture(pid);
+        try {
+          tap.setPointerCapture(pid);
+        } catch {}
       }
-      // тап толкает маркер к центру
-      const d = 0.5 - s.marker;
-      s.marker += Math.sign(d) * Math.min(TAP_PUSH, Math.abs(d));
+      // тап даёт импульс к центру (догоняется плавно в update)
+      const d = 0.5 - (s.marker + s.push);
+      s.push += Math.sign(d) * Math.min(TAP_PUSH, Math.abs(d));
+      if (Math.abs(s.marker + s.push - 0.5) <= s.width / 2) navigator.vibrate?.(20);
     });
     tap.addEventListener('pointermove', (e) => {
       if (e.pointerId !== pid) return;
@@ -78,6 +89,10 @@ export function createHiding({ container, camera, controls, onCaught }) {
     s.closet = closet;
     s.t = 0;
     s.marker = 0.5;
+    s.push = 0;
+    s.width = BASE_ZONE;
+    s.speedK = 1;
+    s.redTime = 0;
     s.vel = s.target = s.velTimer = 0;
     s.emitTimer = EMIT_INTERVAL;
     const nx = Math.sin(closet.rotationY);
@@ -113,34 +128,46 @@ export function createHiding({ container, camera, controls, onCaught }) {
     }
 
     const shrink = s.t > SUFFOCATE_AFTER ? SUFFOCATE_SHRINK * Math.floor((s.t - SUFFOCATE_AFTER) / SUFFOCATE_STEP) : 0;
-    const width = Math.max(0, (near ? NEAR_ZONE : BASE_ZONE) - shrink);
-    if (width <= 0) {
+    const targetWidth = Math.max(0, (near ? NEAR_ZONE : BASE_ZONE) - shrink);
+    if (targetWidth <= 0) {
       exit(true);
       return;
     }
 
     // случайный дрейф маркера
-    const speed = DRIFT * (near ? 1.5 : 1);
+    s.speedK += ((near ? NEAR_DRIFT_K : 1) - s.speedK) * Math.min(1, dt * 2);
+    const speed = DRIFT * s.speedK;
+    // зона меняется плавно
+    const dw = targetWidth - s.width;
+    s.width += Math.sign(dw) * Math.min(Math.abs(dw), ZONE_RATE * dt);
+    const width = s.width;
     s.velTimer -= dt;
     if (s.velTimer <= 0) {
       s.velTimer = 0.4 + Math.random() * 0.8;
       s.target = (Math.random() * 2 - 1) * speed;
     }
-    s.vel += (s.target - s.vel) * Math.min(1, dt * 4);
-    s.marker = Math.min(1, Math.max(0, s.marker + s.vel * dt));
+    s.vel += (s.target - s.vel) * Math.min(1, dt * 2);
+    const pushStep = s.push * (1 - Math.exp(-PUSH_RATE * dt));
+    s.push -= pushStep;
+    s.marker = Math.min(1, Math.max(0, s.marker + s.vel * dt + pushStep));
 
     const green = Math.abs(s.marker - 0.5) <= width / 2;
     if (green) {
-      s.emitTimer = EMIT_INTERVAL; // следующий выход в красное сразу даст метку
+      s.redTime = 0;
+      s.emitTimer = EMIT_INTERVAL; // после окна прощения первая метка сразу
     } else {
-      s.emitTimer += dt;
-      if (s.emitTimer >= EMIT_INTERVAL) {
-        s.emitTimer = 0;
-        if (ghost.getState() === 'search' && gd < CAUGHT_DIST) {
-          onCaught(); // гость стоит рядом, а игрок снова выдал себя
-          return;
+      s.redTime += dt;
+      // окно прощения: пока redTime < GRACE шума нет, успей вернуть маркер
+      if (s.redTime >= GRACE) {
+        s.emitTimer += dt;
+        if (s.emitTimer >= EMIT_INTERVAL) {
+          s.emitTimer = 0;
+          if (ghost.getState() === 'search' && gd < CAUGHT_DIST) {
+            onCaught(); // гость стоит рядом, а игрок снова выдал себя
+            return;
+          }
+          emitNoise(s.closet.x, s.closet.z, 2, { closet: true });
         }
-        emitNoise(s.closet.x, s.closet.z, 2, { closet: true });
       }
     }
 
@@ -148,7 +175,8 @@ export function createHiding({ container, camera, controls, onCaught }) {
       ui.zone.style.left = (0.5 - width / 2) * 100 + '%';
       ui.zone.style.width = width * 100 + '%';
       ui.marker.style.left = s.marker * 100 + '%';
-      ui.breath.classList.toggle('red', !green);
+      ui.breath.classList.toggle('warn', !green && s.redTime < GRACE);
+      ui.breath.classList.toggle('red', !green && s.redTime >= GRACE);
     }
   }
 
