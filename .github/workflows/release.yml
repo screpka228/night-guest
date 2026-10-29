@@ -47,9 +47,12 @@ jobs:
             echo "::error::Секрет ANDROID_SIGNING не задан."
             exit 1
           fi
+          # убираем пробелы и переносы строк, которые добавляет телефон при копировании
+          SIGNING="$(printf '%s' "$SIGNING" | tr -d '[:space:]')"
           PASS="${SIGNING%%:*}"
           B64="${SIGNING#*:}"
           echo "::add-mask::$PASS"
+          echo "Длина пароля: ${#PASS} (ожидается 20), длина keystore: ${#B64} (ожидается 3648)"
           echo "$B64" | base64 -d > android/app/release.keystore
           chmod 600 android/app/release.keystore
           {
