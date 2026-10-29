@@ -55,6 +55,8 @@ jobs:
           echo "Длина пароля: ${#PASS} (ожидается 20), длина keystore: ${#B64} (ожидается 3648)"
           echo "$B64" | base64 -d > android/app/release.keystore
           chmod 600 android/app/release.keystore
+          echo "sha256 keystore: $(sha256sum android/app/release.keystore | cut -c1-16)"
+          keytool -list -keystore android/app/release.keystore -storepass "$PASS" 2>&1 | tail -3
           {
             echo "ANDROID_KEYSTORE_PASSWORD=$PASS"
             echo "ANDROID_KEY_PASSWORD=$PASS"
