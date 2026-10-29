@@ -58,17 +58,9 @@ jobs:
           echo "sha256 keystore: $(sha256sum android/app/release.keystore | cut -c1-16)"
           # форма пароля без раскрытия символов: U — заглавная, l — строчная, d — цифра, ? — другое
           echo "Форма пароля: $(printf '%s' "$PASS" | sed 's/[A-Z]/U/g; s/[a-z]/l/g; s/[0-9]/d/g; s/[^Uld]/?/g')"
-          # телефон мог изменить регистр первой буквы при вставке — пробуем варианты
-          OK=""
-          for cand in "$PASS" "${PASS^}" "${PASS,}" "${PASS,,}"; do
-            if keytool -list -keystore android/app/release.keystore -storepass "$cand" > /tmp/kt.txt 2>&1; then
-              PASS="$cand"; OK=1; break
-            fi
-          done
-          if [ -z "$OK" ]; then
+          if ! keytool -list -keystore android/app/release.keystore -storepass "$PASS" > /tmp/kt.txt 2>&1; then
             echo "::error::keytool не открыл keystore"; cat /tmp/kt.txt; exit 1
           fi
-          echo "::add-mask::$PASS"
           tail -2 /tmp/kt.txt
           {
             echo "ANDROID_KEYSTORE_PASSWORD=$PASS"
