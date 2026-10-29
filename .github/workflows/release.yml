@@ -38,23 +38,28 @@ jobs:
       - name: Android base patch (vibrate, landscape, version)
         run: node scripts/android-patch.mjs base
 
-      - name: Decode keystore
+      - name: Decode keystore and set signing env
         env:
-          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          # один секрет ANDROID_SIGNING = <пароль>:<keystore в base64>
+          SIGNING: ${{ secrets.ANDROID_SIGNING }}
         run: |
-          if [ -z "$KEYSTORE_B64" ]; then
-            echo "::error::Секрет ANDROID_KEYSTORE_BASE64 не задан."
+          if [ -z "$SIGNING" ]; then
+            echo "::error::Секрет ANDROID_SIGNING не задан."
             exit 1
           fi
-          echo "$KEYSTORE_B64" | base64 -d > android/app/release.keystore
+          PASS="${SIGNING%%:*}"
+          B64="${SIGNING#*:}"
+          echo "::add-mask::$PASS"
+          echo "$B64" | base64 -d > android/app/release.keystore
           chmod 600 android/app/release.keystore
+          {
+            echo "ANDROID_KEYSTORE_PASSWORD=$PASS"
+            echo "ANDROID_KEY_PASSWORD=$PASS"
+            echo "ANDROID_KEY_ALIAS=nightguest"
+          } >> "$GITHUB_ENV"
 
       - name: Inject signing config
         run: node scripts/android-patch.mjs signing
-        env:
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
       - name: Build signed APK
         run: |
